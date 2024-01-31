@@ -1,0 +1,64 @@
+/*This is a file-based CSS styling sheet. The following document contains various styling for the SRER Precipitation App.*/
+
+/*Remember:
+'.' = class
+'#' = id
+*/
+
+body {
+    background-color: #f8f8f8; /* Off-white background */
+    color: #333333; /* Off-black text color */
+}
+
+
+#title-home {
+  text-align: center;
+  font-size: 50px;
+}
+
+#description-home {
+  font-size: 25px;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+#goals {
+  font-size: 40px;
+}
+
+#home-goals {
+  font-size: 20px;
+}
+
+#second-home {
+  text-align: center;
+  font-size: 45px;
+}
+
+.icon-section {
+  display: flex;
+  justify-content: center;
+}
+
+#home-icons {
+  font-size: 100px;
+  margin: 0px 120px 120px;
+  color: green;
+}
+
+#home-icons:hover {
+  transform: scale(1.2);
+}
+
+.display-home-section {
+  display: flex;
+  justify-content: center;
+}
+
+#display-home-text {
+  font-size: 40px;
+  margin: 0 100px 100px;
+}
+
+
