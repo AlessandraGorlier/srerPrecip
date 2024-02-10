@@ -15,6 +15,7 @@ library(shinythemes)
 library(shinyWidgets)
 library(leaflet)
 library(ggplot2)
+library(tidyverse)
 
 # SET LIMITS --------------------------------------------------------------
 
@@ -39,6 +40,10 @@ bounds <- sf::st_read("data/srerboundary/bounds.shp") |>
 # Read in Road Bounds
 roads <- sf::st_read("data/roads/roads.shp") |>
   sf::st_transform('+proj=longlat +datum=WGS84')
+
+# Precipitation data
+precipitation <- read_csv("data/precipitation/active_gauges_precip.csv")
+
 
 ### HOME PAGE MODULAIZATION -------------------------------------------------------
 
@@ -90,7 +95,7 @@ pageWelcomeUi <- function(id) {
             p(id = "home-goals", "1) "),
             p(id = "home-goals", "2) "),
             p(id = "home-goals", "3) "),
-            actionButton(NS(id, "get_started_button"), label = "Get Started!", icon("paper-plane"),
+            actionButton(ns("get_started_button"), label = "Get Started!", icon("paper-plane"),
                          style = "font-size: 20px; margin-left: 65em; color: #fff; background-color: #337ab7; border-color: #2e6da4")
           )
           )
@@ -100,7 +105,7 @@ pageWelcomeUi <- function(id) {
 
 # Module Server function
 pageWelcomeServer <- function(id, parentSession){
-  moduleServer( id, function(input, output, session){
+  moduleServer(id, function(input, output, session){
     #server for "get started" button
       observeEvent(input$get_started_button, {
         updateNavbarPage(session = parentSession,
@@ -113,60 +118,53 @@ pageWelcomeServer <- function(id, parentSession){
 
 ### SELECT & DOWNLOAD PAGE -------------------------------------------------------------
 # Module UI function
-pageSelectUi <- function(id) {
+pageSelectUi <- function(id, selectedGauge) {
+  ns <- NS(id)
+  tagList(
   fluidPage(
   sidebarLayout(
     sidebarPanel(
       h4("Select rain gauges and set year and month"),
-      p("1. Click map to select location (use +/- buttons to zoom, use cursor to pan)"),
-      p("2. Use slider to choose time period of interest (limited to at least 30 yr period)"),
-      p("3. Choose drought index (SPI or SPEI)"),
-      p("4. Click download or visualize (message will appear to show progress"),
+      p("1. Select rain guage (can hover on icons to view location of gauge)"),
+      p("2. Use sliders to choose time period of interest (this includes year and month)"),
+      p("3. Click download or visualize (message will appear to show progress)"),
 
       # select gauges
-      pickerInput(NS(id,"select-gauges"),
+      selectInput(ns("selectGauges"),
         label = "Select Rain Gauges:",
-        choices = c('GRARI', 'AMADO', 'PAST3','SW','41','ROAD',
-                    'WHITE', 'RODEN', 'DESGR', 'FORES', '45',
-                    'BOX','IBP','PARKE','RUELA', 'ERIOP', 'MUHLE',
-                    'NW','DESST','164','DESRI','HUERF','LIMST',
-                    'NE'),
-        multiple = TRUE,
-        options = list("max-options" = 5)
-      ),
+        choices = unique(precipitation$station)),
 
       # select months
-      sliderTextInput(NS(id, "select-months"),
-        label = "Select Specificed Month Range:",
-        choices = month.abb,
-        grid = TRUE,
-        selected = month.abb[c(4, 8)]
-      ),
+       sliderInput(ns("selectMonths"),
+                  "Month Selection",
+                  min = 1, max = 12, value = c(3, 9)),
 
       # slider input for years
-      sliderInput("years", "Year Selection",
-                  min = 1895, max = as.numeric(format(Sys.Date()-32, "%Y")), value = value, sep=''),
+      sliderInput(ns("selectYears"),
+                  "Year Selection",
+                  min = 1922, max = max(precipitation$year), value = value, sep=''),
 
 
-      actionButton("refresh","Download data"),
+      downloadButton(ns("downloadData"),"Download data"),
+      actionButton(ns("visualizeData"), "Visualize data"),
       hr(),
       p("Re-download the dataset if you make any changes to location, time period or selected drought index"),
       p("All statistics and figures on other pages are calculated based on the location and time period specified here. The time period selection forces a minimum length of 30 years to ensure enough observations to calculate meaningful drought indices and climate statistics.")
 
     ),
     mainPanel(
-      leafletOutput(NS(id, "srerMap"),
+      leafletOutput(ns("srerMap"),
                     height = "800px",
                     width = "1000px")
       )
     )
   )
+  )
 } # End of UI
 
 # Module Server function
-pageSelectServer <- function(id, session) {
+pageSelectServer <- function(id, selectedGauge, selectedYear) {
   moduleServer(id, function(input, output, session) {
-
     #Interactive map where you can select rain gauges
     output$srerMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
@@ -186,33 +184,73 @@ pageSelectServer <- function(id, session) {
                          lat = 31.8331,
                          zoom = 12)
     })
+
+    filtered_data <- reactive ({
+      precipitation |>
+        filter(station == input$selectGauges,
+               (month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2]),
+               (year >= input$selectYears[1] & year <= input$selectYears[2])
+        )
+    })
+
+    output$downloadData <- downloadHandler(
+      filename = function() {
+        paste("precipitaiton_", Sys.Date(), ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(filtered_data(), file)
+      }
+    )
+    # Log reactive values
+    observeEvent(input$selectGauges, {
+      selectedGauge(input$selectGauges)
+    })
+    # observeEvent(input$selectMonths, {
+    #   selectedYear(input$selectMonths)
+    # })
+    observeEvent(input$selectYears, {
+      selectedYear(input$selectYears)
+    })
   })
 } # End of Server
 
 
 ### GENERAL VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageVisualizationUi <- function(id){
-  tagList()
+pageVisualizationUi <- function(id, selectedGauge, selectedYear){
+  ns <- NS(id)
+  tagList(
+    plotOutput(outputId = ns("graph"))
+  )
 } # End of UI
 
-pageVisualizationServer <- function(id){
-  moduleServer(id, function(input, output, session){
+pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
+  moduleServer(id, function(input, output, session) {
+    output$graph <- renderPlot({
+      req(selectedGauge())
 
+      filtered <- precipitation %>%
+        filter(station %in% selectedGauge(),
+               year == selectedYear()) %>%
+        group_by(year) %>%
+        summarise(avg_precip = mean(precipitation))
+
+      ggplot(filtered, aes(x=year, y=avg_precip)) + geom_bar(stat="identity")
+    })
   })
 } # End of Server
 
 ### SPI VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageSpiUi <- function(id){
-  tagList()
-} # End of UI
+spiUI <- function(id) {
+  tagList(
+  )
+}
 
-pageSpiServer <- function(id){
-  moduleServer(id, function(input, output, session){
-
+spiServer <- function(id) {
+  moduleServer(id, function(input, output, session) {
   })
-} # End of Server
+}
 
 ### DROUGHT CATEGORY VISUALIZATION ---------------------------------------------------
 # Module UI function
@@ -243,22 +281,23 @@ ui <- navbarPage(
   # Main UI: Select & Download Tab
   tabPanel(title = "Select & Download",
            icon = icon('map-location-dot'),
-           pageSelectUi("select")
+           pageSelectUi("select", selectedGauge)
   ),
 
   # Main UI: General Visualization Tab
   tabPanel(title = "General Visualiztion",
            icon = icon('chart-simple'),
-           pageVisualizationUi("visualization")
+           pageVisualizationUi("visualization"),
+           plotOutput("annualPlot")
   ),
 
   # Main UI: SPI Tab
   tabPanel(title = "SPI",
            icon = icon('cloud-rain'),
-           pageSpiUi("spi")
+           spiUI("spi")
   ),
 
-  # Main UI: Drough Tab
+  # Main UI: Drought Tab
   tabPanel(title = "Drought Cateogry",
            icon = icon('sun-plant-wilt'),
            pageDroughtUi("drought"))
@@ -267,10 +306,12 @@ ui <- navbarPage(
 
   # Main App Server
   server <- function(input, output, session) {
+    selectedGauge <- reactiveVal(NULL)
+    selectedYear <- reactiveVal (NULL)
     pageWelcomeServer("welcome", parentSession = session)
-    pageSelectServer("select")
-    pageVisualizationServer("visualization")
-    pageSpiServer("spi")
+    pageSelectServer("select", selectedGauge, selectedYear)
+    pageVisualizationServer("visualization", selectedGauge, selectedYear)
+    spiServer("spi")
     pageDroughtServer("drought")
   } # Server definition ends
 
