@@ -129,24 +129,40 @@ pageSelectUi <- function(id, selectedGauge) {
       sidebarLayout(
         sidebarPanel(
           h3("Select rain gauges and set year"),
-          hr(style = "border-top: 1.5px solid grey;"),
           p("1. Select rain guage (can hover on icons to view location of gauge)"),
           p("2. Use sliders to choose time period of interest"),
           p("3. Click download or visualize (message will appear to show progress)"),
-
-          # select gauges
+          p(HTML("<i>If DOWNLOADING data, please select <b> months, years, and rain gauge(s)</b></i>")),
+          p(HTML("<i>If VISUALIZING data, please select <b> years, and rain gauge</b></i>")),
+          hr(style = "border-top: 1.5px solid grey;"),
+          h3("Visualize Data"),
+          # select gauges - VISUALIZATION
           selectInput(ns("selectGauges"),
                       label = "Select Rain Gauge:",
                       choices = unique(precipitation$station)),
 
-          # slider input for years
+          # slider input for years - VISUALIZATION
           sliderInput(ns("selectYears"),
                       "Year Selection:",
                       min = 1922, max = max(precipitation$year), value = value, sep=''),
-
-
-          downloadButton(ns("downloadData"),"Download Data"),
           actionButton(ns("visualizeData"), "Visualize Data"),
+          hr(style = "border-top: 1.5px solid grey;"),
+          h3("Downoad Data"),
+          # select gauges - DOWNLOAD
+          selectInput(ns("downloadSelectGauges"),
+                      label = "Select Rain Gauge:",
+                      choices = unique(precipitation$station),
+                      multiple = TRUE),
+
+          # slider input for years - DOWNLOAD
+          sliderInput(ns("downloadSelectYears"),
+                      "Year Selection:",
+                      min = 1922, max = max(precipitation$year), value = value, sep=''),
+          # select months - DOWNLOAD
+          sliderInput(ns("selectMonths"),
+                      "Month Selection",
+                      min = 1, max = 12, value = c(3, 9)),
+          downloadButton(ns("downloadData"),"Download Data"),
           hr(),
           p("*Please revisualize the data if you make any changes to the selected rain gauge or years."),
           p("*Figures and calculations are determined from the selected rain gauge and time period (year) chosen above.")
@@ -163,7 +179,7 @@ pageSelectUi <- function(id, selectedGauge) {
 } # End of UI
 
 # Module Server function
-pageSelectServer <- function(id, selectedGauge, selectedYear) {
+pageSelectServer <- function(id, selectedGauge, selectedYear, downloadSelectGauge, selectMonths, downloadSelectYear) {
   moduleServer(id, function(input, output, session) {
     #Interactive map where you can select rain gauges
     output$srerMap = leaflet::renderLeaflet({
@@ -187,9 +203,9 @@ pageSelectServer <- function(id, selectedGauge, selectedYear) {
 
     filtered_data <- reactive ({
       precipitation |>
-        filter(station == input$selectGauges,
-               #(month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2]),
-               (year >= input$selectYears[1] & year <= input$selectYears[2])
+        filter(station %in% input$downloadSelectGauges,
+               (month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2]),
+               (year >= input$downloadSelectYears[1] & year <= input$downloadSelectYears[2])
         )
     })
 
@@ -201,12 +217,22 @@ pageSelectServer <- function(id, selectedGauge, selectedYear) {
         write.csv(filtered_data(), file)
       }
     )
-    # Log reactive values
+    # Log reactive values - VISUALIZATION
     observeEvent(input$selectGauges, {
       selectedGauge(input$selectGauges)
     })
     observeEvent(input$selectYears, {
       selectedYear(input$selectYears)
+    })
+    # Log reactive values - DOWNLOAD
+    observeEvent(input$downloadSelectGauges, {
+      downloadSelectGauge(input$downloadSelectGauges)
+    })
+    observeEvent(input$downloadSelectYears, {
+      downloadSelectYear(input$downloadSelectYears)
+    })
+    observeEvent(input$selectMonths, {
+      selectMonths(input$selectMonths)
     })
   })
 } # End of Server
@@ -411,8 +437,11 @@ ui <- navbarPage(
 server <- function(input, output, session) {
   selectedGauge <- reactiveVal(NULL)
   selectedYear <- reactiveVal (NULL)
+  downloadSelectGauge <- reactiveVal(NULL)
+  downloadSelectYear <- reactiveVal (NULL)
+  selectMonths <- reactiveVal (NULL)
   pageWelcomeServer("welcome", parentSession = session)
-  pageSelectServer("select", selectedGauge, selectedYear)
+  pageSelectServer("select", selectedGauge, selectedYear, downloadSelectGauge, selectMonths, downloadSelectYear)
   pageVisualizationServer("visualization", selectedGauge, selectedYear)
   spiServer("spi")
   pageDroughtServer("drought")
