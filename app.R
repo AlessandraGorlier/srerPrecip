@@ -16,6 +16,7 @@ library(shinyWidgets)
 library(leaflet)
 library(ggplot2)
 library(tidyverse)
+library(DT)
 
 # SET LIMITS --------------------------------------------------------------
 
@@ -50,68 +51,71 @@ precipitation <- read_csv("data/precipitation/active_gauges_precip.csv")
 # Module UI function
 pageWelcomeUi <- function(id) {
   ns <- NS(id)
-    tagList(
-      tags$head(
-        tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
-      ),
-      fluidPage(
+  tagList(
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
+    ),
+    fluidPage(
+      div(
+        class = "main-container",
         div(
-          class = "main-container",
-          div(
-            class = "first-section",
-            h1(id = "title-home",
-               strong('Welcome to the Santa Rita Precipitation Website!')),
-            p(id = "description-home", "This tool serves the purpose of downloading and visualizing
+          class = "first-section",
+          h1(id = "title-home",
+             strong('Welcome to the Santa Rita Precipitation Website!')),
+          p(id = "description-home", "This tool serves the purpose of downloading and visualizing
              monthly-updated precipitation data from the Santa Rita Experimental
              Range. The Santa Rita Experimental Range currently has 24 active rain
              gauges that are monitored monthly. Here, you can interact with, download,
-             and visualize important historical and current data!")),
-          hr(
-            style = "border-top: 1.5px solid grey;"
+             and visualize important historical and current data!"),
+          actionButton(ns("get_started_button"), label = "Get Started!", icon("paper-plane"),
+                       style = "font-size: 20px; align-item: center;
+                                color: #fff; background-color: #337ab7;
+                                border-color: #2e6da4")
+          ),
+        hr(
+          style = "border-top: 1.5px solid grey;"
+        ),
+        div(
+          class = "second-section",
+          h1(id = "second-home",
+             strong("What Can You Do?")),
+          div(
+            class = "icon-section",
+            icon("check", id = "home-icons"),
+            icon("download", id = "home-icons"),
+            icon("bar-chart", id = "home-icons")
           ),
           div(
-            class = "second-section",
-            h1(id = "second-home",
-               strong("What Can You Do?")),
-            div(
-              class = "icon-section",
-              icon("check", id = "home-icons"),
-              icon("download", id = "home-icons"),
-              icon("bar-chart", id = "home-icons")
-            ),
-            div(
-              class = "display-home-section",
-              h2(id = "display-home-text", "Select"),
-              h2(id = "display-home-text", "Download"),
-              h2(id = "display-home-text", "Visualize")
-            )
-          ),
-          hr(
-            style = "border-top: 1.5px solid grey;"
-          ),
-          div(
-            h2(id = "goals",
-               "Goals:"),
-            p(id = "home-goals", "1) "),
-            p(id = "home-goals", "2) "),
-            p(id = "home-goals", "3) "),
-            actionButton(ns("get_started_button"), label = "Get Started!", icon("paper-plane"),
-                         style = "font-size: 20px; margin-left: 65em; color: #fff; background-color: #337ab7; border-color: #2e6da4")
+            class = "display-home-section",
+            h2(id = "display-home-text", "Select"),
+            h2(id = "display-home-text", "Download"),
+            h2(id = "display-home-text", "Visualize")
           )
-          )
+        ),
+        hr(
+          style = "border-top: 1.5px solid grey;"
+        ),
+        div(
+          h2(id = "goals",
+             "Goals:"),
+          p(id = "home-goals", "1) "),
+          p(id = "home-goals", "2) "),
+          p(id = "home-goals", "3) ")
+        )
       )
     )
+  )
 } # End of UI
 
 # Module Server function
 pageWelcomeServer <- function(id, parentSession){
   moduleServer(id, function(input, output, session){
     #server for "get started" button
-      observeEvent(input$get_started_button, {
-        updateNavbarPage(session = parentSession,
-                         inputId = "navbar",
-                         selected = "Select & Download")
-      })
+    observeEvent(input$get_started_button, {
+      updateNavbarPage(session = parentSession,
+                       inputId = "navbar",
+                       selected = "Select & Download")
+    })
   })
 } #End of Server
 
@@ -124,32 +128,28 @@ pageSelectUi <- function(id, selectedGauge) {
     fluidPage(
       sidebarLayout(
         sidebarPanel(
-          h4("Select rain gauges and set year and month"),
+          h3("Select rain gauges and set year"),
+          hr(style = "border-top: 1.5px solid grey;"),
           p("1. Select rain guage (can hover on icons to view location of gauge)"),
-          p("2. Use sliders to choose time period of interest (this includes year and month)"),
+          p("2. Use sliders to choose time period of interest"),
           p("3. Click download or visualize (message will appear to show progress)"),
 
           # select gauges
           selectInput(ns("selectGauges"),
-                      label = "Select Rain Gauges:",
+                      label = "Select Rain Gauge:",
                       choices = unique(precipitation$station)),
-
-          # select months
-          sliderInput(ns("selectMonths"),
-                      "Month Selection",
-                      min = 1, max = 12, value = c(3, 9)),
 
           # slider input for years
           sliderInput(ns("selectYears"),
-                      "Year Selection",
+                      "Year Selection:",
                       min = 1922, max = max(precipitation$year), value = value, sep=''),
 
 
-          downloadButton(ns("downloadData"),"Download data"),
-          actionButton(ns("visualizeData"), "Visualize data"),
+          downloadButton(ns("downloadData"),"Download Data"),
+          actionButton(ns("visualizeData"), "Visualize Data"),
           hr(),
-          p("Re-download the dataset if you make any changes to location, time period or selected drought index"),
-          p("All statistics and figures on other pages are calculated based on the location and time period specified here. The time period selection forces a minimum length of 30 years to ensure enough observations to calculate meaningful drought indices and climate statistics.")
+          p("*Please revisualize the data if you make any changes to the selected rain gauge or years."),
+          p("*Figures and calculations are determined from the selected rain gauge and time period (year) chosen above.")
 
         ),
         mainPanel(
@@ -188,7 +188,7 @@ pageSelectServer <- function(id, selectedGauge, selectedYear) {
     filtered_data <- reactive ({
       precipitation |>
         filter(station == input$selectGauges,
-               (month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2]),
+               #(month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2]),
                (year >= input$selectYears[1] & year <= input$selectYears[2])
         )
     })
@@ -205,9 +205,6 @@ pageSelectServer <- function(id, selectedGauge, selectedYear) {
     observeEvent(input$selectGauges, {
       selectedGauge(input$selectGauges)
     })
-    # observeEvent(input$selectMonths, {
-    #   selectedYear(input$selectMonths)
-    # })
     observeEvent(input$selectYears, {
       selectedYear(input$selectYears)
     })
@@ -223,22 +220,44 @@ pageVisualizationUi <- function(id, selectedGauge, selectedYear){
     fluidPage(
       sidebarLayout(
         sidebarPanel(
-          leafletOutput(ns("selectedMap"))
+          h3("Average Annual Precipitation"),
+          leafletOutput(ns("selectedMap")),
+          p(HTML("<b>Selected Rain Gauge:</b>")),
+          textOutput(ns("textSelectedGauge")),
+          br(),
+          p(HTML("<b>Average Annual Precipitation:</b>")),
+          textOutput(ns("textFiltered")),
+          br(),
+          br(),
+          br(),
+          downloadButton(ns("downloadDT"),"Download Data Table"),
+          downloadButton(ns("downloadAnnPlot"), "Download Plot"),
         ),
         mainPanel(
-          plotOutput(outputId = ns("graph"))
+          plotOutput(outputId = ns("AnnGraph")),
+          br(),
+          hr(style = "border-top: 1.5px solid grey;"),
+          br(),
+          DT::dataTableOutput(outputId = ns("annualDT"))
         )
       )
     )
   )
-}
+} #End of UI
 
 pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
   moduleServer(id, function(input, output, session) {
+    #filter to selected gauge
+    gauge_selected <- reactive ({
+      gauges |>
+        filter(STATION %in% selectedGauge())
+    })
+
+    #map selected gauge
     output$selectedMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
         leaflet::addTiles() |>
-        #leaflet::addMarkers(data = selectedGauge(), label = selectedGauge()) |>
+        leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
                              weight = 2) |>
@@ -248,26 +267,79 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
           weight = 0.5,
           opacity = 1
         ) |>
-        #addPolylines(data = pastures, color="lightgreen", weight = 0.5, opacity = 0.5) %>%
         leaflet::setView(lng = -110.8529,
                          lat = 31.8331,
                          zoom = 11)
     })
 
-    output$graph <- renderPlot({
-      filtered <- precipitation %>%
+    #Filter data for graph and data table
+    filtered_means <- reactive ({
+      precipitation |>
         filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2]) %>%
-        group_by(year) %>%
+               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
+        group_by(year) |>
         summarise(avg_precip = mean(precipitation))
 
-      ggplot(filtered, aes(x=year, y=avg_precip)) +
+    })
+
+    #Filter to find mean
+    overall_mean <- reactive ({
+      precipitation |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2])
+
+    })
+
+    #Average Temperature plot per selected yrs + gauge
+    annual_graph <- reactive ({
+      ggplot(filtered_means(), aes(x = year, y = avg_precip)) +
         geom_bar(stat = "identity", fill = "skyblue", color = 'grey') +
+        geom_hline(yintercept = mean(overall_mean()$precipitation, na.rm=TRUE)) +
+        #geom_text(aes(0, mean(filtered()$avg_precip, na.rm=TRUE), label = 'mean avg. precipitation', vjust = -1)) +
         labs(x = "Year",
              y = "Average Precipitation",
-             title = paste("Average Annual Precipitation for", selectedGauge())) +
-        theme_bw()
+             title = paste("Average Annual Precipitation for", selectedGauge(),
+                           "(", selectedYear()[1], "-", selectedYear()[2], ")")) +
+        theme_light(base_size = 15)
     })
+
+    output$AnnGraph <- renderPlot({
+      annual_graph()
+    })
+
+    #Load data table()
+    output$annualDT <- DT::renderDataTable({
+      filtered_means()
+    })
+
+    #selected gauge as text output
+    output$textSelectedGauge <- renderText({
+      selectedGauge()
+    })
+
+    # mean as text output
+    output$textFiltered <- renderText({
+      mean(overall_mean()$precipitation)
+    })
+
+    # download data table
+    output$downloadDT <- downloadHandler(
+      filename = function() {
+        paste0("annual_precip_", selectedGauge(), ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(filtered_means(), file, row.names = FALSE)
+      }
+    )
+    #download plot
+    output$downloadAnnPlot <- downloadHandler(
+      filename = function(){
+        paste0("annual_plot_", selectedGauge(),".png", sep = "")
+        },
+      content = function(file){
+        ggsave(file, plot = annual_graph(), width = 15, height = 7)
+      }
+    )
   })
 } # End of Server
 
@@ -276,12 +348,12 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
 spiUI <- function(id) {
   tagList(
   )
-}
+} # End of UI
 
 spiServer <- function(id) {
   moduleServer(id, function(input, output, session) {
   })
-}
+} # End of Server
 
 ### DROUGHT CATEGORY VISUALIZATION ---------------------------------------------------
 # Module UI function
@@ -335,16 +407,16 @@ ui <- navbarPage(
 ) # End of UI
 
 
-  # Main App Server
-  server <- function(input, output, session) {
-    selectedGauge <- reactiveVal(NULL)
-    selectedYear <- reactiveVal (NULL)
-    pageWelcomeServer("welcome", parentSession = session)
-    pageSelectServer("select", selectedGauge, selectedYear)
-    pageVisualizationServer("visualization", selectedGauge, selectedYear)
-    spiServer("spi")
-    pageDroughtServer("drought")
-  } # Server definition ends
+# Main App Server
+server <- function(input, output, session) {
+  selectedGauge <- reactiveVal(NULL)
+  selectedYear <- reactiveVal (NULL)
+  pageWelcomeServer("welcome", parentSession = session)
+  pageSelectServer("select", selectedGauge, selectedYear)
+  pageVisualizationServer("visualization", selectedGauge, selectedYear)
+  spiServer("spi")
+  pageDroughtServer("drought")
+} # Server definition ends
 
 
 # Run the application
