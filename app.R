@@ -380,6 +380,9 @@ spiUI <- function(id, selectedGauge, selectedYear) {
     fluidPage(
       sidebarLayout(
         sidebarPanel(
+          h3("Standard Precipitation Index"),
+          leafletOutput(ns("selectedMap")),
+          br(),
           downloadButton(ns("downloadSPIPlot"), "Download Plot")
         ),
         mainPanel(
@@ -393,6 +396,29 @@ spiUI <- function(id, selectedGauge, selectedYear) {
 
 spiServer <- function(id, selectedGauge, selectedYear) {
   moduleServer(id, function(input, output, session) {
+    #filter to selected gauge
+    gauge_selected <- reactive ({
+      gauges |>
+        filter(STATION %in% selectedGauge())
+    })
+    #map selected gauge
+    output$selectedMap = leaflet::renderLeaflet({
+      leaflet::leaflet() |>
+        leaflet::addTiles() |>
+        leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
+        leaflet::addPolygons(data = bounds,
+                             color = "black",
+                             weight = 2) |>
+        leaflet::addPolylines(
+          data = roads,
+          color = "black",
+          weight = 0.5,
+          opacity = 1
+        ) |>
+        leaflet::setView(lng = -110.8529,
+                         lat = 31.8331,
+                         zoom = 11)
+    })
     #data calculation for 1,3,and 12
 
     #filter
@@ -439,15 +465,41 @@ spiServer <- function(id, selectedGauge, selectedYear) {
         theme_bw()
     })
 
+    processed_spi_multi <- reactive ({
+      filtered_spi_multi <- precipitation |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
+        select(year, month, precipitation) |>
+        mutate(precipitation = (precipitation/ 100) * 25.4)
+
+      filtered_spi_multi$date <- paste(filtered_spi_multi$month, "-", filtered_spi_multi$year, sep = "")
+
+      for (i in 1:50) {
+        multi_SPI <- spi(filtered_spi_multi$precipitation, i, na.rm = TRUE)
+        filtered_spi_multi[[paste('spi', i, sep = '')]] <- multi_SPI$fitted
+
+      }
+
+      filtered_spi_multi <- filtered_spi_multi |>
+        mutate(across(starts_with("spi"), ~ifelse(. == -Inf, NA, .)))
+
+      spi_multi_all <- filtered_spi_multi |>
+        pivot_longer(cols = starts_with("spi"), names_to = "variable", values_to = "spi_value") |>
+        mutate(date = paste(month, year, sep = "-"),
+               variable = as.numeric(gsub("\\D", "", variable)))
+
+    })
+
+
     # #data viz (multi-month)
-    # output$multiSPIgraph <- renderPlotly({
-    #   plot_ly(processed_spi(), x = ~date, y = ~timescale2, z = ~spi_vals,
-    #           colors = brewer.pal(11,'BrBG'), type = "heatmap", zmin = -3, zmax = 3) |>
-    #     layout(title = paste0("Multi-scale ", selectedGauge(), " Plot"),
-    #            xaxis = list(title = "Month-Year"),
-    #            yaxis = list(title = "Scale(mos)")
-    #     )
-    # })
+    output$multiSPIgraph <- renderPlotly({
+      plot_ly(processed_spi_multi(), x = ~year, y = ~variable, z = ~spi_value,
+              colors = brewer.pal(11,'BrBG'), type = "heatmap", zmin = -3, zmax = 3) |>
+        layout(title = paste0("Multi-scale ", selectedGauge(), " Plot"),
+               xaxis = list(title = "Month-Year"),
+               yaxis = list(title = "Scale(mos)")
+        )
+    })
 
     #download SPI plot
     output$downloadSPIPlot <- downloadHandler(
@@ -464,13 +516,85 @@ spiServer <- function(id, selectedGauge, selectedYear) {
 
 ### DROUGHT CATEGORY VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageDroughtUi <- function(id){
+pageDroughtUi <- function(id, selectedGauge){
   ns <- NS(id)
-  tagList()
+  tagList(
+    fluidPage(
+      sidebarLayout(
+        sidebarPanel(
+          h3("Period Selection"),
+          leafletOutput(ns("selectedMap")),
+          # select period 1 months
+          sliderInput(ns("periodt1"),
+                      "Period 1 selection (1-12 months):",
+                      min = 1, max = 12, value = c(1, 3)),
+          sliderInput(ns("periode1"),
+                      "Period 1 End Month:",
+                      min = 1, max = 12, value = c(1, 7)),
+          sliderInput(ns("periodt2"),
+                      "Period 2 selection (1-12 months):",
+                      min = 1, max = 12, value = c(1, 3)),
+          sliderInput(ns("periode2"),
+                      "Period 2 End Month):",
+                      min = 1, max = 12, value = c(1, 9)),
+          downloadButton(ns("downloadDroughtDT"),"Download Data Table"),
+          downloadButton(ns("downloadDroughPlot"), "Download Plot"),
+        ),
+        mainPanel(
+          plotOutput(outputId = ns("droughtProbs")),
+          br(),
+          plotOutput(outputId = ns("droughtPeriods")),
+          hr(style = "border-top: 1.5px solid grey;"),
+          br(),
+          DT::dataTableOutput(outputId = ns("downloadDroughtPlot"))
+        )
+      )
+    )
+  )
 } # End of UI
 
-pageDroughtServer <- function(id){
+pageDroughtServer <- function(id, selectedGauge){
   moduleServer(id, function(input, output, session){
+    #filter to selected gauge
+    gauge_selected <- reactive ({
+      gauges |>
+        filter(STATION %in% selectedGauge())
+    })
+    #map selected gauge
+    output$selectedMap = leaflet::renderLeaflet({
+      leaflet::leaflet() |>
+        leaflet::addTiles() |>
+        leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
+        leaflet::addPolygons(data = bounds,
+                             color = "black",
+                             weight = 2) |>
+        leaflet::addPolylines(
+          data = roads,
+          color = "black",
+          weight = 0.5,
+          opacity = 1
+        ) |>
+        leaflet::setView(lng = -110.8529,
+                         lat = 31.8331,
+                         zoom = 11)
+    })
+
+    #drought category transitions
+    # output$droughtProbs <-renderPlot({
+    #   ggplot(data=plotStates)+
+    #     geom_tile(aes(x=state2,y=state1,fill=anom),color = "black")+
+    #     geom_text(aes(x=state2,y=state1,fill=anom, label = textlabel), size=4)+
+    #     scale_fill_gradient2(low="lightyellow", mid="white",high="lightblue", midpoint = 0,
+    #                          guide = guide_legend(title="prob anom(%)"))+
+    #     scale_x_discrete(labels=lblText, limits=lims)+
+    #     scale_y_discrete(labels=lblText, limits=lims)+
+    #     labs(x = xlabText, y=ylabText, title=(droughtTitle))+
+    #     theme(axis.text = element_text(size =14))+
+    #     theme(axis.title = element_text(size=14))+
+    #     theme(axis.text.x = element_text(size=14))+
+    #     theme(axis.text.y = element_text(size=14))+
+    #     theme(legend.position = "none") # can change to left or right
+    # })
 
   })
 } # End of Server
@@ -496,7 +620,7 @@ ui <- navbarPage(
   ),
 
   # Main UI: General Visualization Tab
-  tabPanel(title = "General Visualiztion",
+  tabPanel(title = "General Visualization",
            icon = icon('chart-simple'),
            pageVisualizationUi("visualization"),
            plotOutput("annualPlot")
@@ -526,7 +650,7 @@ server <- function(input, output, session) {
   pageSelectServer("select", selectedGauge, selectedYear, selectMonths, downloadSelectYear, downloadSelectGauge)
   pageVisualizationServer("visualization", selectedGauge, selectedYear)
   spiServer("spi", selectedGauge, selectedYear)
-  pageDroughtServer("drought")
+  pageDroughtServer("drought", selectedGauge)
 } # Server definition ends
 
 
