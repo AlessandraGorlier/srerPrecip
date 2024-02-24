@@ -15,8 +15,11 @@ library(shinythemes)
 library(shinyWidgets)
 library(leaflet)
 library(ggplot2)
+library(plotly)
+library(RColorBrewer)
 library(tidyverse)
 library(DT)
+library(SPEI)
 
 # SET LIMITS --------------------------------------------------------------
 
@@ -371,19 +374,98 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
 
 ### SPI VISUALIZATION ---------------------------------------------------
 # Module UI function
-spiUI <- function(id) {
+spiUI <- function(id, selectedGauge, selectedYear) {
+  ns <- NS(id)
   tagList(
+    fluidPage(
+      sidebarLayout(
+        sidebarPanel(
+          downloadButton(ns("downloadSPIPlot"), "Download Plot")
+        ),
+        mainPanel(
+          plotOutput(outputId = ns("spiGraph")),
+          plotlyOutput(outputId = ns("multiSPIgraph"))
+        )
+      )
+    )
   )
 } # End of UI
 
-spiServer <- function(id) {
+spiServer <- function(id, selectedGauge, selectedYear) {
   moduleServer(id, function(input, output, session) {
+    #data calculation for 1,3,and 12
+
+    #filter
+    processed_spi <- reactive ({
+      filtered_spi <- precipitation |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
+        select(year, month_id, precipitation) |>
+        mutate(precipitation = (precipitation/ 100) * 25.4)
+
+      #find spi
+      spi1 <- spi(filtered_spi$precipitation, 1)
+      filtered_spi$spi1<-spi1$fitted
+      spi3 <- spi(filtered_spi$precipitation, 3)
+      filtered_spi$spi3<-spi3$fitted
+      spi12 <- spi(filtered_spi$precipitation, 12)
+      filtered_spi$spi12<-spi12$fitted
+
+      #data cleaning
+      filtered_spi <- filtered_spi |>
+        mutate(spi1 = ifelse(spi1 == -Inf, NA, spi1)) |> #replace -Inf with NA
+        mutate(date = make_date(year, month_id)) |> #combine year and month into date column
+        pivot_longer(cols = c('spi1', 'spi3', 'spi12'),
+                     names_to = 'timescale',
+                     values_to = 'spi_vals') |> #pivot dataframe
+        mutate(timescale = ifelse(timescale == 'spi1', 'SPI (1-month)', timescale),
+               timescale = ifelse(timescale == 'spi3', 'SPI (3-month)', timescale),
+               timescale = ifelse(timescale == 'spi12', 'SPI (12-month)', timescale)) |> #change naming of spi1, spi3, and spi12
+        mutate(timescale = factor(timescale, levels = c('SPI (1-month)', 'SPI (3-month)', 'SPI (12-month)'))) |>  #set levels
+        mutate(pos = spi_vals >=0) |> #create TRUE/FALSE column for positives
+        select(-c(year, month_id, precipitation)) |>#deselect unneeded columns
+        mutate(timescale = as.character(timescale),  # Convert to character type if it's a factor
+               timescale2 = as.numeric(gsub("\\D", "", timescale)))  # Perform conversion
+    })
+
+
+    #data viz (facet by month (1,3,12))
+    output$spiGraph <-renderPlot({
+      ggplot(processed_spi(), aes(x = date, y = spi_vals, fill = pos))+
+        geom_bar(stat = "identity", position = "identity")+
+        scale_fill_manual(values = c("#8c510a","#01665e"), guide = FALSE)+
+        facet_wrap(~ timescale, ncol = 1)+
+        labs(x = 'month/year',y = 'SPI', title = paste0('Standard Precipitation Index ', selectedGauge(),' - 1/3/12 month'))+
+        theme_bw()
+    })
+
+    # #data viz (multi-month)
+    # output$multiSPIgraph <- renderPlotly({
+    #   plot_ly(processed_spi(), x = ~date, y = ~timescale2, z = ~spi_vals,
+    #           colors = brewer.pal(11,'BrBG'), type = "heatmap", zmin = -3, zmax = 3) |>
+    #     layout(title = paste0("Multi-scale ", selectedGauge(), " Plot"),
+    #            xaxis = list(title = "Month-Year"),
+    #            yaxis = list(title = "Scale(mos)")
+    #     )
+    # })
+
+    #download SPI plot
+    output$downloadSPIPlot <- downloadHandler(
+      filename = function(){
+        paste0("spi_timescale_", selectedGauge(),".png", sep = "")
+      },
+      content = function(file){
+        ggsave(file, plot = spiGraph(), width = 15, height = 7)
+      }
+    )
+
   })
 } # End of Server
 
 ### DROUGHT CATEGORY VISUALIZATION ---------------------------------------------------
 # Module UI function
 pageDroughtUi <- function(id){
+  ns <- NS(id)
   tagList()
 } # End of UI
 
@@ -437,13 +519,13 @@ ui <- navbarPage(
 server <- function(input, output, session) {
   selectedGauge <- reactiveVal(NULL)
   selectedYear <- reactiveVal (NULL)
+  selectMonths <- reactiveVal (NULL)
   downloadSelectGauge <- reactiveVal(NULL)
   downloadSelectYear <- reactiveVal (NULL)
-  selectMonths <- reactiveVal (NULL)
   pageWelcomeServer("welcome", parentSession = session)
-  pageSelectServer("select", selectedGauge, selectedYear, downloadSelectGauge, selectMonths, downloadSelectYear)
+  pageSelectServer("select", selectedGauge, selectedYear, selectMonths, downloadSelectYear, downloadSelectGauge)
   pageVisualizationServer("visualization", selectedGauge, selectedYear)
-  spiServer("spi")
+  spiServer("spi", selectedGauge, selectedYear)
   pageDroughtServer("drought")
 } # Server definition ends
 
