@@ -430,7 +430,7 @@ spiServer <- function(id, selectedGauge, selectedYear) {
                year >= 1960 & year <= 1990) |>
         select(year, month_id, precipitation) |>
         mutate(precipitation = (precipitation/ 100) * 25.4) |>
-        mutate(date = as.Date(paste(filtered_spi_multi$year, sprintf("%02d", filtered_spi_multi$month_id), "01", sep = "-")))
+        mutate(date = as.Date(paste(year, sprintf("%02d", month_id), "01", sep = "-")))
 
 
       for (i in 1:48) {
@@ -458,7 +458,7 @@ spiServer <- function(id, selectedGauge, selectedYear) {
                year >= 1960 & year <= 1990) |>
         select(year, month_id, precipitation) |>
         mutate(precipitation = (precipitation/ 100) * 25.4) |>
-        mutate(date = as.Date(paste(filtered_spi_multi$year, sprintf("%02d", filtered_spi_multi$month_id), "01", sep = "-")))
+        mutate(date = as.Date(paste(year, sprintf("%02d", month_id), "01", sep = "-")))
 
 
       for (i in 1:48) {
@@ -475,7 +475,7 @@ spiServer <- function(id, selectedGauge, selectedYear) {
     })
 
     #data viz (1,3,and 12 month)
-    output$spiGraph <- renderPlot ({
+    spi_graph <- reactive ({
       ggplot(processed_spi_month(), aes(x = date,y = spi_value, fill = pos))+
         geom_bar(stat = "identity", position = "identity")+
         scale_fill_manual(values = c("#8c510a","#01665e"), guide = FALSE)+
@@ -484,6 +484,9 @@ spiServer <- function(id, selectedGauge, selectedYear) {
         theme_bw()
     })
 
+    output$spiGraph <- renderPlot({
+      spi_graph()
+    })
 
     #data viz (multi-month)
     output$multiSPIgraph <- renderPlotly({
@@ -500,7 +503,7 @@ spiServer <- function(id, selectedGauge, selectedYear) {
         paste0("spi_timescale_", selectedGauge(),".png", sep = "")
       },
       content = function(file){
-        ggsave(file, plot = spiGraph(), width = 15, height = 7)
+        ggsave(file, plot = spi_graph(), width = 15, height = 7)
       }
     )
 
