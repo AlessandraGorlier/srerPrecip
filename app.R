@@ -18,6 +18,7 @@ library(ggplot2)
 library(plotly)
 library(RColorBrewer)
 library(tidyverse)
+library(naniar)
 library(DT)
 library(SPEI)
 
@@ -383,10 +384,13 @@ spiUI <- function(id, selectedGauge, selectedYear) {
           h3("Standard Precipitation Index"),
           leafletOutput(ns("selectedMap")),
           br(),
-          downloadButton(ns("downloadSPIPlot"), "Download Plot")
+          downloadButton(ns("downloadSPIPlot"), "Download 1/3/12 month Plot")
         ),
         mainPanel(
           plotOutput(outputId = ns("spiGraph")),
+          br(),
+          hr(style = "border-top: 1.5px solid grey;"),
+          br(),
           plotlyOutput(outputId = ns("multiSPIgraph"))
         )
       )
@@ -420,85 +424,74 @@ spiServer <- function(id, selectedGauge, selectedYear) {
                          zoom = 11)
     })
     #data calculation for 1,3,and 12
-
-    #filter
-    processed_spi <- reactive ({
-      filtered_spi <- precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
-        select(year, month_id, precipitation) |>
-        mutate(precipitation = (precipitation/ 100) * 25.4)
-
-      #find spi
-      spi1 <- spi(filtered_spi$precipitation, 1)
-      filtered_spi$spi1<-spi1$fitted
-      spi3 <- spi(filtered_spi$precipitation, 3)
-      filtered_spi$spi3<-spi3$fitted
-      spi12 <- spi(filtered_spi$precipitation, 12)
-      filtered_spi$spi12<-spi12$fitted
-
-      #data cleaning
-      filtered_spi <- filtered_spi |>
-        mutate(spi1 = ifelse(spi1 == -Inf, NA, spi1)) |> #replace -Inf with NA
-        mutate(date = make_date(year, month_id)) |> #combine year and month into date column
-        pivot_longer(cols = c('spi1', 'spi3', 'spi12'),
-                     names_to = 'timescale',
-                     values_to = 'spi_vals') |> #pivot dataframe
-        mutate(timescale = ifelse(timescale == 'spi1', 'SPI (1-month)', timescale),
-               timescale = ifelse(timescale == 'spi3', 'SPI (3-month)', timescale),
-               timescale = ifelse(timescale == 'spi12', 'SPI (12-month)', timescale)) |> #change naming of spi1, spi3, and spi12
-        mutate(timescale = factor(timescale, levels = c('SPI (1-month)', 'SPI (3-month)', 'SPI (12-month)'))) |>  #set levels
-        mutate(pos = spi_vals >=0) |> #create TRUE/FALSE column for positives
-        select(-c(year, month_id, precipitation)) |>#deselect unneeded columns
-        mutate(timescale = as.character(timescale),  # Convert to character type if it's a factor
-               timescale2 = as.numeric(gsub("\\D", "", timescale)))  # Perform conversion
-    })
-
-
-    #data viz (facet by month (1,3,12))
-    output$spiGraph <-renderPlot({
-      ggplot(processed_spi(), aes(x = date, y = spi_vals, fill = pos))+
-        geom_bar(stat = "identity", position = "identity")+
-        scale_fill_manual(values = c("#8c510a","#01665e"), guide = FALSE)+
-        facet_wrap(~ timescale, ncol = 1)+
-        labs(x = 'month/year',y = 'SPI', title = paste0('Standard Precipitation Index ', selectedGauge(),' - 1/3/12 month'))+
-        theme_bw()
-    })
-
-    processed_spi_multi <- reactive ({
+    processed_spi_month <- reactive ({
       filtered_spi_multi <- precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
-        select(year, month, precipitation) |>
-        mutate(precipitation = (precipitation/ 100) * 25.4)
+        filter(station %in% 'BOX',
+               year >= 1960 & year <= 1990) |>
+        select(year, month_id, precipitation) |>
+        mutate(precipitation = (precipitation/ 100) * 25.4) |>
+        mutate(date = as.Date(paste(filtered_spi_multi$year, sprintf("%02d", filtered_spi_multi$month_id), "01", sep = "-")))
 
-      filtered_spi_multi$date <- paste(filtered_spi_multi$month, "-", filtered_spi_multi$year, sep = "")
 
-      for (i in 1:50) {
+      for (i in 1:48) {
         multi_SPI <- spi(filtered_spi_multi$precipitation, i, na.rm = TRUE)
         filtered_spi_multi[[paste('spi', i, sep = '')]] <- multi_SPI$fitted
 
       }
 
-      filtered_spi_multi <- filtered_spi_multi |>
-        mutate(across(starts_with("spi"), ~ifelse(. == -Inf, NA, .)))
-
-      spi_multi_all <- filtered_spi_multi |>
-        pivot_longer(cols = starts_with("spi"), names_to = "variable", values_to = "spi_value") |>
-        mutate(date = paste(month, year, sep = "-"),
-               variable = as.numeric(gsub("\\D", "", variable)))
+      spi_month <- filtered_spi_multi |>
+        naniar::replace_with_na_all(condition = ~.x == -Inf) |>
+        select(date, year, spi1, spi3, spi12) |>
+        rename("SPI (1-Month)" = spi1,
+               "SPI (3-Month)" = spi3,
+               "SPI (12-Month)" = spi12) |>
+        pivot_longer(cols = starts_with("SPI"), names_to = "variable", values_to = "spi_value") |>
+        mutate(pos = spi_value >=0) |>
+        mutate(variable = factor(variable, levels = c("SPI (1-Month)", "SPI (3-Month)", "SPI (12-Month)")))
 
     })
 
+    #calc for multiple
+    processed_spi_multi <- reactive ({
+      filtered_spi_multi <- precipitation |>
+        filter(station %in% 'BOX',
+               year >= 1960 & year <= 1990) |>
+        select(year, month_id, precipitation) |>
+        mutate(precipitation = (precipitation/ 100) * 25.4) |>
+        mutate(date = as.Date(paste(filtered_spi_multi$year, sprintf("%02d", filtered_spi_multi$month_id), "01", sep = "-")))
 
-    # #data viz (multi-month)
+
+      for (i in 1:48) {
+        multi_SPI <- spi(filtered_spi_multi$precipitation, i, na.rm = TRUE)
+        filtered_spi_multi[[paste('spi', i, sep = '')]] <- multi_SPI$fitted
+
+      }
+
+      spi_multi_all <- filtered_spi_multi |>
+        naniar::replace_with_na_all(condition = ~.x == -Inf) |>
+        pivot_longer(cols = starts_with("spi"), names_to = "variable", values_to = "spi_value") |>
+        mutate(variable = as.numeric(gsub("\\D", "", variable)))
+
+    })
+
+    #data viz (1,3,and 12 month)
+    output$spiGraph <- renderPlot ({
+      ggplot(processed_spi_month(), aes(x = date,y = spi_value, fill = pos))+
+        geom_bar(stat = "identity", position = "identity")+
+        scale_fill_manual(values = c("#8c510a","#01665e"), guide = FALSE)+
+        facet_wrap(~ variable, ncol = 1)+
+        labs(x = 'month/year',y = 'SPI', title = paste0(selectedGauge(), ' - 1/3/12 month'))+
+        theme_bw()
+    })
+
+
+    #data viz (multi-month)
     output$multiSPIgraph <- renderPlotly({
-      plot_ly(processed_spi_multi(), x = ~year, y = ~variable, z = ~spi_value,
-              colors = brewer.pal(11,'BrBG'), type = "heatmap", zmin = -3, zmax = 3) |>
+      plot_ly(processed_spi_multi(), x = ~date, y = ~variable, z = ~spi_value,
+              colors=brewer.pal(11,'BrBG'), type = "heatmap", zmin=-3, zmax=3) %>%
         layout(title = paste0("Multi-scale ", selectedGauge(), " Plot"),
-               xaxis = list(title = "Month-Year"),
-               yaxis = list(title = "Scale(mos)")
-        )
+               xaxis=list(title="Month-Year"),
+               yaxis=list(title="Scale(mos)"))
     })
 
     #download SPI plot
