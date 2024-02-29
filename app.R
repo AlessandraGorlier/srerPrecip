@@ -47,7 +47,10 @@ roads <- sf::st_read("data/roads/roads.shp") |>
   sf::st_transform('+proj=longlat +datum=WGS84')
 
 # Precipitation data
-precipitation <- read_csv("data/precipitation/active_gauges_precip.csv")
+precipitation <- read_csv("data/precipitation/estimated_precip.csv")
+
+# imputed data
+imputed_data <- read_csv("data/precipitation/estimated_gauges.csv")
 
 
 ### HOME PAGE MODULAIZATION -------------------------------------------------------
@@ -149,7 +152,6 @@ pageSelectUi <- function(id, selectedGauge) {
           sliderInput(ns("selectYears"),
                       "Year Selection:",
                       min = 1922, max = max(precipitation$year), value = value, sep=''),
-          actionButton(ns("visualizeData"), "Visualize Data"),
           hr(style = "border-top: 1.5px solid grey;"),
           h3("Downoad Data"),
           # select gauges - DOWNLOAD
@@ -262,6 +264,8 @@ pageVisualizationUi <- function(id, selectedGauge, selectedYear){
           br(),
           downloadButton(ns("downloadDT"),"Download Data Table"),
           downloadButton(ns("downloadAnnPlot"), "Download Plot"),
+          br(),
+          downloadButton(ns("downloadTXT"), "Imputed Data Information")
         ),
         mainPanel(
           plotOutput(outputId = ns("AnnGraph")),
@@ -368,6 +372,15 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
         },
       content = function(file){
         ggsave(file, plot = annual_graph(), width = 15, height = 7)
+      }
+    )
+    # download imputed information table
+    output$downloadDT <- downloadHandler(
+      filename = function() {
+        paste0("imputed_data", ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(imputed_data, file, row.names = FALSE)
       }
     )
   })
