@@ -190,7 +190,7 @@ pageSelectServer <- function(id, selectedGauge, selectedYear, downloadSelectGaug
     #Interactive map where you can select rain gauges
     output$srerMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
-        leaflet::addTiles() |>
+        leaflet::addProviderTiles('Esri.WorldTopoMap') |>
         leaflet::addMarkers(data = gauges, label = gauges$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
@@ -290,7 +290,7 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
     #map selected gauge
     output$selectedMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
-        leaflet::addTiles() |>
+        leaflet::addProviderTiles('Esri.WorldTopoMap') |>
         leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
@@ -421,7 +421,7 @@ spiServer <- function(id, selectedGauge, selectedYear) {
     #map selected gauge
     output$selectedMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
-        leaflet::addTiles() |>
+        leaflet::addProviderTiles('Esri.WorldTopoMap') |>
         leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
@@ -439,8 +439,8 @@ spiServer <- function(id, selectedGauge, selectedYear) {
     #data calculation for 1,3,and 12
     processed_spi_month <- reactive ({
       filtered_spi_multi <- precipitation |>
-        filter(station %in% 'BOX',
-               year >= 1960 & year <= 1990) |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
         select(year, month_id, precipitation) |>
         mutate(precipitation = (precipitation/ 100) * 25.4) |>
         mutate(date = as.Date(paste(year, sprintf("%02d", month_id), "01", sep = "-")))
@@ -467,8 +467,8 @@ spiServer <- function(id, selectedGauge, selectedYear) {
     #calc for multiple
     processed_spi_multi <- reactive ({
       filtered_spi_multi <- precipitation |>
-        filter(station %in% 'BOX',
-               year >= 1960 & year <= 1990) |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
         select(year, month_id, precipitation) |>
         mutate(precipitation = (precipitation/ 100) * 25.4) |>
         mutate(date = as.Date(paste(year, sprintf("%02d", month_id), "01", sep = "-")))
@@ -572,7 +572,7 @@ pageDroughtServer <- function(id, selectedGauge){
     #map selected gauge
     output$selectedMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
-        leaflet::addTiles() |>
+        leaflet::addProviderTiles('Esri.WorldTopoMap') |>
         leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
