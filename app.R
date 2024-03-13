@@ -21,6 +21,7 @@ library(tidyverse)
 library(naniar)
 library(DT)
 library(SPEI)
+library(viridis)
 
 # SET LIMITS --------------------------------------------------------------
 
@@ -525,7 +526,7 @@ spiServer <- function(id, selectedGauge, selectedYear) {
 
 ### DROUGHT CATEGORY VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageDroughtUi <- function(id, selectedGauge){
+pageDroughtUi <- function(id, selectedGauge, selectedYear, selectMonths2){
   ns <- NS(id)
   tagList(
     fluidPage(
@@ -534,41 +535,28 @@ pageDroughtUi <- function(id, selectedGauge){
           h3("Period Selection"),
           leafletOutput(ns("selectedMap")),
           # select period 1 months
-          sliderInput(ns("periodt1"),
-                      "Period 1 selection (1-12 months):",
+          # slider input for years - VISUALIZATION
+          sliderInput(ns("selectMonths2"),
+                      "Month Selection:",
                       min = 1, max = 12, value = c(1, 3)),
-          sliderInput(ns("periode1"),
-                      "Period 1 End Month:",
-                      min = 1, max = 12, value = c(1, 7)),
-          sliderInput(ns("periodt2"),
-                      "Period 2 selection (1-12 months):",
-                      min = 1, max = 12, value = c(1, 3)),
-          sliderInput(ns("periode2"),
-                      "Period 2 End Month):",
-                      min = 1, max = 12, value = c(1, 9)),
-          downloadButton(ns("downloadDroughtDT"),"Download Data Table"),
-          downloadButton(ns("downloadDroughPlot"), "Download Plot"),
+          downloadButton(ns("downloadDroughtPlot"),"Download Plot")
         ),
         mainPanel(
-          plotOutput(outputId = ns("droughtProbs")),
-          br(),
-          plotOutput(outputId = ns("droughtPeriods")),
-          hr(style = "border-top: 1.5px solid grey;"),
-          br(),
-          DT::dataTableOutput(outputId = ns("downloadDroughtPlot"))
+          plotOutput(outputId = ns("heatMap"))
         )
       )
     )
   )
 } # End of UI
 
-pageDroughtServer <- function(id, selectedGauge){
+pageDroughtServer <- function(id, selectedGauge, selectedYear, selectMonths2){
   moduleServer(id, function(input, output, session){
     #filter to selected gauge
     gauge_selected <- reactive ({
       gauges |>
         filter(STATION %in% selectedGauge())
     })
+
     #map selected gauge
     output$selectedMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
@@ -588,22 +576,48 @@ pageDroughtServer <- function(id, selectedGauge){
                          zoom = 11)
     })
 
-    #drought category transitions
-    # output$droughtProbs <-renderPlot({
-    #   ggplot(data=plotStates)+
-    #     geom_tile(aes(x=state2,y=state1,fill=anom),color = "black")+
-    #     geom_text(aes(x=state2,y=state1,fill=anom, label = textlabel), size=4)+
-    #     scale_fill_gradient2(low="lightyellow", mid="white",high="lightblue", midpoint = 0,
-    #                          guide = guide_legend(title="prob anom(%)"))+
-    #     scale_x_discrete(labels=lblText, limits=lims)+
-    #     scale_y_discrete(labels=lblText, limits=lims)+
-    #     labs(x = xlabText, y=ylabText, title=(droughtTitle))+
-    #     theme(axis.text = element_text(size =14))+
-    #     theme(axis.title = element_text(size=14))+
-    #     theme(axis.text.x = element_text(size=14))+
-    #     theme(axis.text.y = element_text(size=14))+
-    #     theme(legend.position = "none") # can change to left or right
-    # })
+    #calc for multiple
+    processed_heat_map <- reactive ({
+      rain_data <- precipitation |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2],
+               month_id >= input$selectMonths2[1] & month_id <= input$selectMonths2[2])|>
+        mutate(month = fct_inorder(month))
+    })
+
+    heatMap <- reactive ({
+      ggplot(processed_heat_map(), aes(x = year, y = month, fill = precipitation)) +
+        geom_tile(colour="gray20", linewidth=1, stat="identity") +
+        scale_fill_viridis(option = "mako", discrete = FALSE, limits = c(0, 750),
+                           oob = scales::squish, breaks = c(0, 250, 500, 750),
+                           labels = c("0", "250", "500", ">750")) +
+        theme(
+          plot.title = element_text(hjust = 0,vjust = 1, size = rel(2)),
+          axis.text = element_text(size = rel(1)),
+          axis.text.y  = element_text(hjust=1),
+          legend.text = element_text(size=rel(1.3))
+        ) +
+        labs(title = "Total Monthly Rainfall at ", x = "Year", y = "Month")
+    })
+
+    output$heatMap <- renderPlot({
+      heatMap()
+    })
+
+
+    observeEvent(input$selectMonths2, {
+      selectMonths2(input$selectMonths2)
+    })
+
+    #download plot
+    output$downloadDroughtPlot <- downloadHandler(
+      filename = function(){
+        paste0("spi_timescale_", selectedGauge(),".png", sep = "")
+      },
+      content = function(file){
+        ggsave(file, plot = heatMap(), width = 15, height = 7)
+      }
+    )
 
   })
 } # End of Server
@@ -655,11 +669,12 @@ server <- function(input, output, session) {
   selectMonths <- reactiveVal (NULL)
   downloadSelectGauge <- reactiveVal(NULL)
   downloadSelectYear <- reactiveVal (NULL)
+  selectMonths2 <- reactiveVal (NULL)
   pageWelcomeServer("welcome", parentSession = session)
   pageSelectServer("select", selectedGauge, selectedYear, selectMonths, downloadSelectYear, downloadSelectGauge)
   pageVisualizationServer("visualization", selectedGauge, selectedYear)
   spiServer("spi", selectedGauge, selectedYear)
-  pageDroughtServer("drought", selectedGauge)
+  pageDroughtServer("drought", selectedGauge, selectedYear, selectMonths2)
 } # Server definition ends
 
 
