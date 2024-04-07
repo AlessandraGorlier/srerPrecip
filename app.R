@@ -21,7 +21,7 @@ library(tidyverse)
 library(naniar)
 library(DT)
 library(SPEI)
-library(viridis)
+library(scico)
 
 # SET LIMITS --------------------------------------------------------------
 
@@ -128,31 +128,19 @@ pageWelcomeServer <- function(id, parentSession){
 } #End of Server
 
 
-### SELECT & DOWNLOAD PAGE -------------------------------------------------------------
+### DOWNLOAD PAGE -------------------------------------------------------------
 # Module UI function
-pageSelectUi <- function(id, selectedGauge) {
+pageSelectUi <- function(id) {
   ns <- NS(id)
   tagList(
     fluidPage(
       sidebarLayout(
         sidebarPanel(
-          h3("Select rain gauges and set year"),
+          h3("Select rain gauges and year"),
           p("1. Select rain guage (can hover on icons to view location of gauge)"),
           p("2. Use sliders to choose time period of interest"),
-          p("3. Click download or visualize (message will appear to show progress)"),
+          p("3. Click download"),
           p(HTML("<i>If DOWNLOADING data, please select <b> months, years, and rain gauge(s)</b></i>")),
-          p(HTML("<i>If VISUALIZING data, please select <b> years, and rain gauge</b></i>")),
-          hr(style = "border-top: 1.5px solid grey;"),
-          h3("Visualize Data"),
-          # select gauges - VISUALIZATION
-          selectInput(ns("selectGauges"),
-                      label = "Select Rain Gauge:",
-                      choices = unique(precipitation$station)),
-
-          # slider input for years - VISUALIZATION
-          sliderInput(ns("selectYears"),
-                      "Year Selection:",
-                      min = 1922, max = max(precipitation$year), value = value, sep=''),
           hr(style = "border-top: 1.5px solid grey;"),
           h3("Downoad Data"),
           # select gauges - DOWNLOAD
@@ -170,10 +158,7 @@ pageSelectUi <- function(id, selectedGauge) {
                       "Month Selection",
                       min = 1, max = 12, value = c(3, 9)),
           downloadButton(ns("downloadData"),"Download Data"),
-          hr(),
-          p("*Please revisualize the data if you make any changes to the selected rain gauge or years."),
-          p("*Figures and calculations are determined from the selected rain gauge and time period (year) chosen above.")
-
+          hr()
         ),
         mainPanel(
           leafletOutput(ns("srerMap"),
@@ -186,7 +171,7 @@ pageSelectUi <- function(id, selectedGauge) {
 } # End of UI
 
 # Module Server function
-pageSelectServer <- function(id, selectedGauge, selectedYear, downloadSelectGauge, selectMonths, downloadSelectYear) {
+pageSelectServer <- function(id) {
   moduleServer(id, function(input, output, session) {
     #Interactive map where you can select rain gauges
     output$srerMap = leaflet::renderLeaflet({
@@ -224,75 +209,65 @@ pageSelectServer <- function(id, selectedGauge, selectedYear, downloadSelectGaug
         write.csv(filtered_data(), file)
       }
     )
-    # Log reactive values - VISUALIZATION
-    observeEvent(input$selectGauges, {
-      selectedGauge(input$selectGauges)
-    })
-    observeEvent(input$selectYears, {
-      selectedYear(input$selectYears)
-    })
-    # Log reactive values - DOWNLOAD
-    observeEvent(input$downloadSelectGauges, {
-      downloadSelectGauge(input$downloadSelectGauges)
-    })
-    observeEvent(input$downloadSelectYears, {
-      downloadSelectYear(input$downloadSelectYears)
-    })
-    observeEvent(input$selectMonths, {
-      selectMonths(input$selectMonths)
-    })
   })
 } # End of Server
 
 
 ### GENERAL VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageVisualizationUi <- function(id, selectedGauge, selectedYear){
+pageVisualizationUi <- function(id, selectGauges, selectYears){
   ns <- NS(id)
   tagList(
     fluidPage(
       sidebarLayout(
         sidebarPanel(
           h3("Average Annual Precipitation"),
-          leafletOutput(ns("selectedMap")),
-          p(HTML("<b>Selected Rain Gauge:</b>")),
-          textOutput(ns("textSelectedGauge")),
-          br(),
-          p(HTML("<b>Average Annual Precipitation:</b>")),
+          leafletOutput(ns("srerMap"),
+                        height = "450px",
+                        width = "550px"),
+          #select input for gauges
+          selectInput(ns("selectGauges"),
+                      label = "Select Rain Gauge:",
+                      choices = unique(precipitation$station)),
+          # slider input for years - VISUALIZATION
+          sliderInput(ns("selectYears"),
+                      "Year Selection:",
+                      min = 1922, max = max(precipitation$year), value = value, sep=''),
+          p(HTML("<b>Average:</b>")),
           textOutput(ns("textFiltered")),
+          p(HTML("<b>Standard Deviation:</b>")),
+          textOutput(ns("textFiltered2")),
+          p(HTML("<b>Maximum:</b>")),
+          textOutput(ns("textFiltered3")),
+          p(HTML("<b>Minimum:</b>")),
+          textOutput(ns("textFiltered4")),
           br(),
           br(),
           br(),
           downloadButton(ns("downloadDT"),"Download Data Table"),
           downloadButton(ns("downloadAnnPlot"), "Download Plot"),
-          br(),
-          downloadButton(ns("downloadTXT"), "Imputed Data Information")
+          width = 5
         ),
         mainPanel(
           plotOutput(outputId = ns("AnnGraph")),
           br(),
           hr(style = "border-top: 1.5px solid grey;"),
           br(),
-          DT::dataTableOutput(outputId = ns("annualDT"))
+          DT::dataTableOutput(outputId = ns("annualDT")),
+          width = 7
         )
       )
     )
   )
 } #End of UI
 
-pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
+pageVisualizationServer <- function(id) {
   moduleServer(id, function(input, output, session) {
-    #filter to selected gauge
-    gauge_selected <- reactive ({
-      gauges |>
-        filter(STATION %in% selectedGauge())
-    })
-
-    #map selected gauge
-    output$selectedMap = leaflet::renderLeaflet({
+    #map of gauges
+    output$srerMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
         leaflet::addProviderTiles('Esri.WorldTopoMap') |>
-        leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
+        leaflet::addMarkers(data = gauges, label = gauges$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
                              weight = 2) |>
@@ -302,39 +277,55 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
           weight = 0.5,
           opacity = 1
         ) |>
+        #addPolylines(data = pastures, color="lightgreen", weight = 0.5, opacity = 0.5) %>%
         leaflet::setView(lng = -110.8529,
                          lat = 31.8331,
-                         zoom = 11)
+                         zoom = 11.4)
     })
 
-    #Filter data for graph and data table
+    #Filter data for graph and data table (add 12-month period spi - will be used in dt)
     filtered_means <- reactive ({
-      precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
-        group_by(year) |>
-        summarise(avg_precip = mean(precipitation))
+      filtered <- precipitation |>
+        filter(station %in% input$selectGauges,
+               year >= input$selectYears[1] & year <= input$selectYears[2]) |>
+          mutate(precipitation = (precipitation/ 100) * 25.4) |>
+          select(year, month_id, precipitation)
+
+
+        spi12 <- spi(filtered$precipitation, 12)
+        spi12 <- spi12$fitted
+
+        filtered <- filtered |>
+          mutate(spiyear = spi12) |>
+          group_by(year) |>
+          summarise(avg_precip = mean(precipitation),
+                    spiyear = mean(spiyear, na.rm = TRUE)) |>
+          mutate(across(c('avg_precip', 'spiyear'), round, 2))
 
     })
 
-    #Filter to find mean
-    overall_mean <- reactive ({
-      precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2])
-
+    #find overall stats
+    overall_mean <- reactive({
+      filtered_data <- filtered_means()
+      filtered_data <- filtered_data |>
+        summarise(all_mean = mean(filtered_data$avg_precip, na.rm = TRUE),
+                  all_sd = sd(filtered_data$avg_precip, na.rm = TRUE),
+                  all_max = max(filtered_data$avg_precip, na.rm = TRUE),
+                  all_min = min(filtered_data$avg_precip, na.rm = TRUE))|>
+        mutate(across(c('all_mean', 'all_sd', 'all_max', 'all_min'), round, 2))
     })
+
 
     #Average Temperature plot per selected yrs + gauge
     annual_graph <- reactive ({
       ggplot(filtered_means(), aes(x = year, y = avg_precip)) +
         geom_bar(stat = "identity", fill = "skyblue", color = 'grey') +
-        geom_hline(yintercept = mean(overall_mean()$precipitation, na.rm=TRUE)) +
+        geom_hline(yintercept = mean(overall_mean()$all_mean, na.rm=TRUE)) +
         #geom_text(aes(0, mean(filtered()$avg_precip, na.rm=TRUE), label = 'mean avg. precipitation', vjust = -1)) +
         labs(x = "Year",
              y = "Average Precipitation",
-             title = paste("Average Annual Precipitation for", selectedGauge(),
-                           "(", selectedYear()[1], "-", selectedYear()[2], ")")) +
+             title = paste("Average Annual Precipitation for", input$selectGauges,
+                           "(", input$selectYears[1], "-", input$selectYears[2], ")")) +
         theme_light(base_size = 15)
     })
 
@@ -347,29 +338,28 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
       filtered_means()
     })
 
-    #selected gauge as text output
-    output$textSelectedGauge <- renderText({
-      selectedGauge()
-    })
-
     # mean as text output
     output$textFiltered <- renderText({
-      mean(overall_mean()$precipitation)
+      overall_mean()$all_mean
     })
 
-    # download data table
-    output$downloadDT <- downloadHandler(
-      filename = function() {
-        paste0("annual_precip_", selectedGauge(), ".csv", sep = "")
-      },
-      content = function(file) {
-        write.csv(filtered_means(), file, row.names = FALSE)
-      }
-    )
+    output$textFiltered2 <- renderText({
+      overall_mean()$all_sd
+    })
+
+    output$textFiltered3 <- renderText({
+      overall_mean()$all_max
+    })
+
+    output$textFiltered4 <- renderText({
+      overall_mean()$all_min
+    })
+
+
     #download plot
     output$downloadAnnPlot <- downloadHandler(
       filename = function(){
-        paste0("annual_plot_", selectedGauge(),".png", sep = "")
+        paste0("annual_plot_", input$selectGauges,".png", sep = "")
         },
       content = function(file){
         ggsave(file, plot = annual_graph(), width = 15, height = 7)
@@ -378,10 +368,10 @@ pageVisualizationServer <- function(id, selectedGauge, selectedYear) {
     # download imputed information table
     output$downloadDT <- downloadHandler(
       filename = function() {
-        paste0("imputed_data", ".csv", sep = "")
+        paste0("avg_annual", ".csv", sep = "")
       },
       content = function(file) {
-        write.csv(imputed_data, file, row.names = FALSE)
+        write.csv(filtered_means(), file, row.names = FALSE)
       }
     )
   })
@@ -534,15 +524,15 @@ pageDroughtUi <- function(id, selectedGauge, selectedYear, selectMonths2){
         sidebarPanel(
           h3("Period Selection"),
           leafletOutput(ns("selectedMap")),
-          # select period 1 months
-          # slider input for years - VISUALIZATION
+          # select period
           sliderInput(ns("selectMonths2"),
                       "Month Selection:",
-                      min = 1, max = 12, value = c(1, 3)),
+                      min = 1, max = 12, value = c(1, 12)),
           downloadButton(ns("downloadDroughtPlot"),"Download Plot")
         ),
         mainPanel(
-          plotOutput(outputId = ns("heatMap"))
+          plotlyOutput(outputId = ns("heatmap")),
+          plotlyOutput(outputId = ns("sumheatmap"))
         )
       )
     )
@@ -585,23 +575,63 @@ pageDroughtServer <- function(id, selectedGauge, selectedYear, selectMonths2){
         mutate(month = fct_inorder(month))
     })
 
-    heatMap <- reactive ({
-      ggplot(processed_heat_map(), aes(x = year, y = month, fill = precipitation)) +
-        geom_tile(colour="gray20", linewidth=1, stat="identity") +
-        scale_fill_viridis(option = "mako", discrete = FALSE, limits = c(0, 750),
-                           oob = scales::squish, breaks = c(0, 250, 500, 750),
-                           labels = c("0", "250", "500", ">750")) +
-        theme(
-          plot.title = element_text(hjust = 0,vjust = 1, size = rel(2)),
-          axis.text = element_text(size = rel(1)),
-          axis.text.y  = element_text(hjust=1),
-          legend.text = element_text(size=rel(1.3))
-        ) +
-        labs(title = "Total Monthly Rainfall at ", x = "Year", y = "Month")
+    #calc for sum
+    sum_heat_map <- reactive ({
+      sum_rain_data <- precipitation |>
+        filter(station %in% selectedGauge(),
+               year >= selectedYear()[1] & year <= selectedYear()[2],
+               month_id >= input$selectMonths2[1] & month_id <= input$selectMonths2[2])|>
+        mutate(month = fct_inorder(month)) |>
+        group_by(month) |>
+        summarise(mean_precip = mean(precipitation), na.rm = TRUE)
     })
 
-    output$heatMap <- renderPlot({
+
+    heatMap <- reactive({
+      gg <- ggplot(processed_heat_map(), aes(x = year, y = month, fill = precipitation)) +
+        geom_tile(colour = "gray20", linewidth = 1, stat = "identity") +
+        scale_fill_viridis_c(option = "mako",
+                              limits = c(0, 750),
+                              oob = scales::squish,
+                              breaks = c(0, 250, 500, 750),
+                              labels = c("0", "250", "500", ">750"),
+                              direction = -1) +
+
+        theme(
+          plot.title = element_text(hjust = 0, vjust = 1, size = rel(2)),
+          axis.text = element_text(size = rel(1)),
+          axis.text.y = element_text(hjust = 1),
+          legend.text = element_text(size = rel(1.3))
+        ) +
+        labs(title = paste0("Total Monthly Rainfall ", selectedGauge()), x = "Year", y = "Month")
+
+      ggplotly(gg)
+    })
+
+    # sumHeatMap <- reactive({
+    #   gg2 <- ggplot(sum_heat_map(), aes(x = month, y = precipitation, fill = precipitation)) +
+    #     geom_tile(colour = "gray20", linewidth = 1, stat = "identity") +
+    #     scale_color_viridis(option = "mako", discrete = FALSE, limits = c(0, 750),
+    #                        oob = scales::squish, breaks = c(0, 250, 500, 750),
+    #                        labels = c("0", "250", "500", ">750"),
+    #                        trans = "reverse") +
+    #     theme(
+    #       plot.title = element_text(hjust = 0, vjust = 1, size = rel(2)),
+    #       axis.text = element_text(size = rel(1)),
+    #       axis.text.y = element_text(hjust = 1),
+    #       legend.text = element_text(size = rel(1.3))
+    #     ) +
+    #     labs(title = paste0("Total Monthly Rainfall ", selectedGauge()), x = "Year", y = "Month")
+    #
+    #   ggplotly(gg2)
+    # })
+
+    output$heatmap <- renderPlotly({
       heatMap()
+    })
+
+    output$sumheatmap <- renderPlotly({
+      sumHeatMap()
     })
 
 
@@ -636,17 +666,17 @@ ui <- navbarPage(
            pageWelcomeUi("welcome")
   ),
 
-  # Main UI: Select & Download Tab
-  tabPanel(title = "Select & Download",
-           icon = icon('map-location-dot'),
-           pageSelectUi("select", selectedGauge)
-  ),
-
   # Main UI: General Visualization Tab
-  tabPanel(title = "General Visualization",
+  tabPanel(title = "Annual Averages",
            icon = icon('chart-simple'),
            pageVisualizationUi("visualization"),
            plotOutput("annualPlot")
+  ),
+
+  # Main UI: Drought Tab
+  tabPanel(title = "Monthly Comparisons",
+           icon = icon('sun-plant-wilt'),
+           pageDroughtUi("drought")
   ),
 
   # Main UI: SPI Tab
@@ -654,11 +684,11 @@ ui <- navbarPage(
            icon = icon('cloud-rain'),
            spiUI("spi")
   ),
-
-  # Main UI: Drought Tab
-  tabPanel(title = "Drought Cateogry",
-           icon = icon('sun-plant-wilt'),
-           pageDroughtUi("drought"))
+  # Main UI: Download Tab
+  tabPanel(title = "Download Data",
+           icon = icon('download'),
+           pageSelectUi("select")
+  ),
 ) # End of UI
 
 
@@ -671,8 +701,8 @@ server <- function(input, output, session) {
   downloadSelectYear <- reactiveVal (NULL)
   selectMonths2 <- reactiveVal (NULL)
   pageWelcomeServer("welcome", parentSession = session)
-  pageSelectServer("select", selectedGauge, selectedYear, selectMonths, downloadSelectYear, downloadSelectGauge)
-  pageVisualizationServer("visualization", selectedGauge, selectedYear)
+  pageSelectServer("select")
+  pageVisualizationServer("visualization")
   spiServer("spi", selectedGauge, selectedYear)
   pageDroughtServer("drought", selectedGauge, selectedYear, selectMonths2)
 } # Server definition ends
