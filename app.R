@@ -50,9 +50,6 @@ roads <- sf::st_read("data/roads/roads.shp") |>
 # Precipitation data
 precipitation <- read_csv("data/precipitation/estimated_precip.csv")
 
-# imputed data
-imputed_data <- read_csv("data/precipitation/estimated_gauges.csv")
-
 
 ### HOME PAGE MODULAIZATION -------------------------------------------------------
 
@@ -213,9 +210,9 @@ pageSelectServer <- function(id) {
 } # End of Server
 
 
-### GENERAL VISUALIZATION ---------------------------------------------------
+### ANNUAL VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageVisualizationUi <- function(id, selectGauges, selectYears){
+pageVisualizationUi <- function(id){
   ns <- NS(id)
   tagList(
     fluidPage(
@@ -245,11 +242,10 @@ pageVisualizationUi <- function(id, selectGauges, selectYears){
           br(),
           br(),
           downloadButton(ns("downloadDT"),"Download Data Table"),
-          downloadButton(ns("downloadAnnPlot"), "Download Plot"),
           width = 5
         ),
         mainPanel(
-          plotOutput(outputId = ns("AnnGraph")),
+          plotlyOutput(outputId = ns("AnnGraph")),
           br(),
           hr(style = "border-top: 1.5px solid grey;"),
           br(),
@@ -318,18 +314,21 @@ pageVisualizationServer <- function(id) {
 
     #Average Temperature plot per selected yrs + gauge
     annual_graph <- reactive ({
-      ggplot(filtered_means(), aes(x = year, y = avg_precip)) +
+      ann <- ggplot(filtered_means(), aes(x = year, y = avg_precip)) +
         geom_bar(stat = "identity", fill = "skyblue", color = 'grey') +
         geom_hline(yintercept = mean(overall_mean()$all_mean, na.rm=TRUE)) +
         #geom_text(aes(0, mean(filtered()$avg_precip, na.rm=TRUE), label = 'mean avg. precipitation', vjust = -1)) +
         labs(x = "Year",
              y = "Average Precipitation",
-             title = paste("Average Annual Precipitation for", input$selectGauges,
+             title = paste("Average Annual Precipitation (mm) for", input$selectGauges,
                            "(", input$selectYears[1], "-", input$selectYears[2], ")")) +
         theme_light(base_size = 15)
+
+      ggplotly(ann)
     })
 
-    output$AnnGraph <- renderPlot({
+
+    output$AnnGraph <- renderPlotly({
       annual_graph()
     })
 
@@ -356,16 +355,7 @@ pageVisualizationServer <- function(id) {
     })
 
 
-    #download plot
-    output$downloadAnnPlot <- downloadHandler(
-      filename = function(){
-        paste0("annual_plot_", input$selectGauges,".png", sep = "")
-        },
-      content = function(file){
-        ggsave(file, plot = annual_graph(), width = 15, height = 7)
-      }
-    )
-    # download imputed information table
+    # download information table
     output$downloadDT <- downloadHandler(
       filename = function() {
         paste0("avg_annual", ".csv", sep = "")
@@ -379,41 +369,47 @@ pageVisualizationServer <- function(id) {
 
 ### SPI VISUALIZATION ---------------------------------------------------
 # Module UI function
-spiUI <- function(id, selectedGauge, selectedYear) {
+spiUI <- function(id) {
   ns <- NS(id)
   tagList(
     fluidPage(
       sidebarLayout(
         sidebarPanel(
           h3("Standard Precipitation Index"),
-          leafletOutput(ns("selectedMap")),
+          leafletOutput(ns("srerMap")),
+          #select input for gauges
+          selectInput(ns("selectGauges"),
+                      label = "Select Rain Gauge:",
+                      choices = unique(precipitation$station)),
+          # slider input for years - VISUALIZATION
+          sliderInput(ns("selectYears"),
+                      "Year Selection:",
+                      min = 1922, max = max(precipitation$year), value = value, sep=''),
           br(),
-          downloadButton(ns("downloadSPIPlot"), "Download 1/3/12 month Plot")
+          downloadButton(ns("downloadSPITable"), "Download SPI Data"),
+          downloadButton(ns("downloadSPIPlot"), "Download SPI (1,3,12) Plot"),
+          width = 5
         ),
         mainPanel(
           plotOutput(outputId = ns("spiGraph")),
           br(),
           hr(style = "border-top: 1.5px solid grey;"),
           br(),
-          plotlyOutput(outputId = ns("multiSPIgraph"))
+          plotlyOutput(outputId = ns("multiSPIgraph")),
+          width = 7
         )
       )
     )
   )
 } # End of UI
 
-spiServer <- function(id, selectedGauge, selectedYear) {
+spiServer <- function(id) {
   moduleServer(id, function(input, output, session) {
-    #filter to selected gauge
-    gauge_selected <- reactive ({
-      gauges |>
-        filter(STATION %in% selectedGauge())
-    })
-    #map selected gauge
-    output$selectedMap = leaflet::renderLeaflet({
+    #map of gauges
+    output$srerMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
         leaflet::addProviderTiles('Esri.WorldTopoMap') |>
-        leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
+        leaflet::addMarkers(data = gauges, label = gauges$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
                              weight = 2) |>
@@ -423,15 +419,16 @@ spiServer <- function(id, selectedGauge, selectedYear) {
           weight = 0.5,
           opacity = 1
         ) |>
+        #addPolylines(data = pastures, color="lightgreen", weight = 0.5, opacity = 0.5) %>%
         leaflet::setView(lng = -110.8529,
                          lat = 31.8331,
-                         zoom = 11)
+                         zoom = 11.4)
     })
     #data calculation for 1,3,and 12
     processed_spi_month <- reactive ({
       filtered_spi_multi <- precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
+        filter(station %in% input$selectGauges,
+               year >= input$selectYears[1] & year <= input$selectYears[2]) |>
         select(year, month_id, precipitation) |>
         mutate(precipitation = (precipitation/ 100) * 25.4) |>
         mutate(date = as.Date(paste(year, sprintf("%02d", month_id), "01", sep = "-")))
@@ -458,8 +455,8 @@ spiServer <- function(id, selectedGauge, selectedYear) {
     #calc for multiple
     processed_spi_multi <- reactive ({
       filtered_spi_multi <- precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2]) |>
+        filter(station %in% input$selectGauges,
+               year >= input$selectYears[1] & year <= input$selectYears[2]) |>
         select(year, month_id, precipitation) |>
         mutate(precipitation = (precipitation/ 100) * 25.4) |>
         mutate(date = as.Date(paste(year, sprintf("%02d", month_id), "01", sep = "-")))
@@ -484,8 +481,9 @@ spiServer <- function(id, selectedGauge, selectedYear) {
         geom_bar(stat = "identity", position = "identity")+
         scale_fill_manual(values = c("#8c510a","#01665e"), guide = FALSE)+
         facet_wrap(~ variable, ncol = 1)+
-        labs(x = 'month/year',y = 'SPI', title = paste0(selectedGauge(), ' - 1/3/12 month'))+
+        labs(x = 'month/year',y = 'SPI', title = paste0(input$selectGauges, ' - 1/3/12 month'))+
         theme_bw()
+
     })
 
     output$spiGraph <- renderPlot({
@@ -496,15 +494,25 @@ spiServer <- function(id, selectedGauge, selectedYear) {
     output$multiSPIgraph <- renderPlotly({
       plot_ly(processed_spi_multi(), x = ~date, y = ~variable, z = ~spi_value,
               colors=brewer.pal(11,'BrBG'), type = "heatmap", zmin=-3, zmax=3) %>%
-        layout(title = paste0("Multi-scale ", selectedGauge(), " Plot"),
+        layout(title = paste0("Multi-scale ", input$selectGauges, " Plot"),
                xaxis=list(title="Month-Year"),
                yaxis=list(title="Scale(mos)"))
     })
 
+    # download information table
+    output$downloadSPITable <- downloadHandler(
+      filename = function() {
+        paste0("spi_data", ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(processed_spi_month(), file, row.names = FALSE)
+      }
+    )
+
     #download SPI plot
     output$downloadSPIPlot <- downloadHandler(
       filename = function(){
-        paste0("spi_timescale_", selectedGauge(),".png", sep = "")
+        paste0("spi_timescale_", input$selectGauges,".png", sep = "")
       },
       content = function(file){
         ggsave(file, plot = spi_graph(), width = 15, height = 7)
@@ -514,44 +522,58 @@ spiServer <- function(id, selectedGauge, selectedYear) {
   })
 } # End of Server
 
-### DROUGHT CATEGORY VISUALIZATION ---------------------------------------------------
+### MONTHLY VISUALIZATION ---------------------------------------------------
 # Module UI function
-pageDroughtUi <- function(id, selectedGauge, selectedYear, selectMonths2){
+pageDroughtUi <- function(id){
   ns <- NS(id)
   tagList(
     fluidPage(
       sidebarLayout(
         sidebarPanel(
           h3("Period Selection"),
-          leafletOutput(ns("selectedMap")),
+          leafletOutput(ns("srerMap")),
+          #select input for gauges
+          selectInput(ns("selectGauges"),
+                      label = "Select Rain Gauge:",
+                      choices = unique(precipitation$station)),
+          # slider input for years - VISUALIZATION
+          sliderInput(ns("selectYears"),
+                      "Year Selection:",
+                      min = 1922, max = max(precipitation$year), value = value, sep=''),
           # select period
-          sliderInput(ns("selectMonths2"),
+          sliderInput(ns("selectMonths"),
                       "Month Selection:",
                       min = 1, max = 12, value = c(1, 12)),
-          downloadButton(ns("downloadDroughtPlot"),"Download Plot")
+          p(HTML("<b>Average:</b>")),
+          textOutput(ns("Filtered")),
+          p(HTML("<b>Standard Deviation:</b>")),
+          textOutput(ns("Filtered2")),
+          p(HTML("<b>Maximum:</b>")),
+          textOutput(ns("Filtered3")),
+          p(HTML("<b>Minimum:</b>")),
+          textOutput(ns("Filtered4")),
+          br(),
+          downloadButton(ns("DownloadMonthlyDT"),"Download Table"),
+          width = 5
         ),
         mainPanel(
           plotlyOutput(outputId = ns("heatmap")),
-          plotlyOutput(outputId = ns("sumheatmap"))
+          DT::dataTableOutput(outputId = ns("monthlyDT")),
+          width = 7
         )
       )
     )
   )
 } # End of UI
 
-pageDroughtServer <- function(id, selectedGauge, selectedYear, selectMonths2){
+pageDroughtServer <- function(id){
   moduleServer(id, function(input, output, session){
-    #filter to selected gauge
-    gauge_selected <- reactive ({
-      gauges |>
-        filter(STATION %in% selectedGauge())
-    })
 
-    #map selected gauge
-    output$selectedMap = leaflet::renderLeaflet({
+    #map of gauges
+    output$srerMap = leaflet::renderLeaflet({
       leaflet::leaflet() |>
         leaflet::addProviderTiles('Esri.WorldTopoMap') |>
-        leaflet::addMarkers(data = gauge_selected(), label = gauge_selected()$STATION) |>
+        leaflet::addMarkers(data = gauges, label = gauges$STATION) |>
         leaflet::addPolygons(data = bounds,
                              color = "black",
                              weight = 2) |>
@@ -561,40 +583,68 @@ pageDroughtServer <- function(id, selectedGauge, selectedYear, selectMonths2){
           weight = 0.5,
           opacity = 1
         ) |>
+        #addPolylines(data = pastures, color="lightgreen", weight = 0.5, opacity = 0.5) %>%
         leaflet::setView(lng = -110.8529,
                          lat = 31.8331,
-                         zoom = 11)
+                         zoom = 11.4)
     })
 
     #calc for multiple
     processed_heat_map <- reactive ({
       rain_data <- precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2],
-               month_id >= input$selectMonths2[1] & month_id <= input$selectMonths2[2])|>
+        filter(station %in% input$selectGauges,
+               year >= input$selectYears[1] & year <= input$selectYears[2],
+               month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2])|>
+        mutate(precipitation = (precipitation/ 100) * 25.4) |>
         mutate(month = fct_inorder(month))
     })
 
     #calc for sum
     sum_heat_map <- reactive ({
       sum_rain_data <- precipitation |>
-        filter(station %in% selectedGauge(),
-               year >= selectedYear()[1] & year <= selectedYear()[2],
-               month_id >= input$selectMonths2[1] & month_id <= input$selectMonths2[2])|>
-        mutate(month = fct_inorder(month)) |>
-        group_by(month) |>
-        summarise(mean_precip = mean(precipitation), na.rm = TRUE)
+        filter(station %in% input$selectGauges,
+               year >= input$selectYears[1] & year <= input$selectYears[2],
+               month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2])|>
+        mutate(precipitation = (precipitation/ 100) * 25.4) |>
+        summarise(mean_precip = mean(precipitation), na.rm = TRUE,
+                  sd_precip = sd(precipitation), na.rm = TRUE,
+                  min_precip = min(precipitation), na.rm = TRUE,
+                  max_precip = max(precipitation), na.rm = TRUE) |>
+        mutate(across(c('mean_precip', 'sd_precip', 'min_precip', 'max_precip'), round, 2))
     })
 
+    #calc for the data table
+    monthly_dt <- reactive ({
+      filtered <- precipitation |>
+        filter(station %in% input$selectGauges,
+               year >= input$selectYears[1] & year <= input$selectYears[2],
+               month_id >= input$selectMonths[1] & month_id <= input$selectMonths[2]) |>
+        mutate(precipitation = (precipitation/ 100) * 25.4) |>
+        select(year, month_id, precipitation)
+
+
+      spi1 <- spi(filtered$precipitation, 1)
+      spi1 <- spi1$fitted
+
+
+      filtered <- filtered |>
+        mutate(spi1_avg = spi1) |>
+        naniar::replace_with_na_all(condition = ~.x == -Inf) |>
+        group_by(year) |>
+        summarise(spi1_avg = mean(spi1_avg, na.rm = TRUE)) |>
+        mutate(across(c('spi1_avg'), round, 2)) |>
+        mutate(months = paste(input$selectMonths[1], "-", input$selectMonths[2])) |>
+        select(year, months, spi1_avg)
+    })
 
     heatMap <- reactive({
       gg <- ggplot(processed_heat_map(), aes(x = year, y = month, fill = precipitation)) +
         geom_tile(colour = "gray20", linewidth = 1, stat = "identity") +
         scale_fill_viridis_c(option = "mako",
-                              limits = c(0, 750),
+                              limits = c(0, 225),
                               oob = scales::squish,
-                              breaks = c(0, 250, 500, 750),
-                              labels = c("0", "250", "500", ">750"),
+                              breaks = c(0, 60, 120, 180),
+                              labels = c("0", "60", "120", ">180"),
                               direction = -1) +
 
         theme(
@@ -603,49 +653,49 @@ pageDroughtServer <- function(id, selectedGauge, selectedYear, selectMonths2){
           axis.text.y = element_text(hjust = 1),
           legend.text = element_text(size = rel(1.3))
         ) +
-        labs(title = paste0("Total Monthly Rainfall ", selectedGauge()), x = "Year", y = "Month")
+        labs(x = 'Year',y = 'Month', title = paste0('Total Monthly Rainfall for ', input$selectGauges, ' (mm)'))
 
       ggplotly(gg)
     })
-
-    # sumHeatMap <- reactive({
-    #   gg2 <- ggplot(sum_heat_map(), aes(x = month, y = precipitation, fill = precipitation)) +
-    #     geom_tile(colour = "gray20", linewidth = 1, stat = "identity") +
-    #     scale_color_viridis(option = "mako", discrete = FALSE, limits = c(0, 750),
-    #                        oob = scales::squish, breaks = c(0, 250, 500, 750),
-    #                        labels = c("0", "250", "500", ">750"),
-    #                        trans = "reverse") +
-    #     theme(
-    #       plot.title = element_text(hjust = 0, vjust = 1, size = rel(2)),
-    #       axis.text = element_text(size = rel(1)),
-    #       axis.text.y = element_text(hjust = 1),
-    #       legend.text = element_text(size = rel(1.3))
-    #     ) +
-    #     labs(title = paste0("Total Monthly Rainfall ", selectedGauge()), x = "Year", y = "Month")
-    #
-    #   ggplotly(gg2)
-    # })
 
     output$heatmap <- renderPlotly({
       heatMap()
     })
 
-    output$sumheatmap <- renderPlotly({
-      sumHeatMap()
+    output$AnnGraph <- renderPlotly({
+      annual_graph()
+    })
+
+    #Load data table()
+    output$monthlyDT <- DT::renderDataTable({
+      monthly_dt()
+    })
+
+    # mean as text output
+    output$Filtered <- renderText({
+      sum_heat_map()$mean_precip
+    })
+
+    output$Filtered2 <- renderText({
+      sum_heat_map()$sd_precip
+    })
+
+    output$Filtered3 <- renderText({
+      sum_heat_map()$max_precip
+    })
+
+    output$Filtered4 <- renderText({
+      sum_heat_map()$min_precip
     })
 
 
-    observeEvent(input$selectMonths2, {
-      selectMonths2(input$selectMonths2)
-    })
-
-    #download plot
-    output$downloadDroughtPlot <- downloadHandler(
-      filename = function(){
-        paste0("spi_timescale_", selectedGauge(),".png", sep = "")
+    # download information table
+    output$DownloadMonthlyDT <- downloadHandler(
+      filename = function() {
+        paste0("spi_monthly", ".csv", sep = "")
       },
-      content = function(file){
-        ggsave(file, plot = heatMap(), width = 15, height = 7)
+      content = function(file) {
+        write.csv(monthly_dt(), file, row.names = FALSE)
       }
     )
 
@@ -694,17 +744,11 @@ ui <- navbarPage(
 
 # Main App Server
 server <- function(input, output, session) {
-  selectedGauge <- reactiveVal(NULL)
-  selectedYear <- reactiveVal (NULL)
-  selectMonths <- reactiveVal (NULL)
-  downloadSelectGauge <- reactiveVal(NULL)
-  downloadSelectYear <- reactiveVal (NULL)
-  selectMonths2 <- reactiveVal (NULL)
   pageWelcomeServer("welcome", parentSession = session)
   pageSelectServer("select")
   pageVisualizationServer("visualization")
-  spiServer("spi", selectedGauge, selectedYear)
-  pageDroughtServer("drought", selectedGauge, selectedYear, selectMonths2)
+  spiServer("spi")
+  pageDroughtServer("drought")
 } # Server definition ends
 
 
