@@ -50,6 +50,16 @@ roads <- sf::st_read("data/roads/roads.shp") |>
 # Precipitation data
 precipitation <- read_csv("data/precipitation/estimated_precip.csv")
 
+# Get images
+imgs <- list.files("images/", pattern=".png", full.names = TRUE)
+
+# Create image text
+imgTexts <- c(
+  "View and interact with long-term annual trends",
+  "Select specific months to analyze changes in long-term trends",
+  "Interact with high-quality vizualizations to view wet periods and droughts"
+)
+
 
 ### HOME PAGE MODULAIZATION -------------------------------------------------------
 
@@ -57,70 +67,61 @@ precipitation <- read_csv("data/precipitation/estimated_precip.csv")
 pageWelcomeUi <- function(id) {
   ns <- NS(id)
   tagList(
-    tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
-    ),
     fluidPage(
-      div(
-        class = "main-container",
-        div(
-          class = "first-section",
-          h1(id = "title-home",
-             strong('Welcome to the Santa Rita Precipitation Website!')),
-          p(id = "description-home", "This tool serves the purpose of downloading and visualizing
+
+      titlePanel(
+        h1("Welcome to the Santa Rita Precipitation Website!", align = "center",
+           style = "padding: 50px;")),
+
+      sidebarLayout(
+        sidebarPanel(
+          h3("This tool serves the purpose of downloading and visualizing
              monthly-updated precipitation data from the Santa Rita Experimental
              Range. The Santa Rita Experimental Range currently has 24 active rain
              gauges that are monitored monthly. Here, you can interact with, download,
              and visualize important historical and current data!"),
-          actionButton(ns("get_started_button"), label = "Get Started!", icon("paper-plane"),
-                       style = "font-size: 20px; align-item: center;
-                                color: #fff; background-color: #337ab7;
-                                border-color: #2e6da4")
+          br(),
+          h2("Goals:"),
+          p("1) View and interact with high-quality visualizations that show wet
+            periods, droughts, and longer term trends."),
+          p("2) Download calculated SPI values across multiple time periods."),
+          p("3) Gain a broader understanding of trends with the assistance of descriptive statistics.")
+        ),
+
+        mainPanel(
+          imageOutput(ns("image")),
+          fluidRow(
+            column(3, offset=2, actionButton(ns("previous"), "Previous")),
+            column(3, offset=2, actionButton(ns("next"), "Next"))
           ),
-        hr(
-          style = "border-top: 1.5px solid grey;"
-        ),
-        div(
-          class = "second-section",
-          h1(id = "second-home",
-             strong("What Can You Do?")),
-          div(
-            class = "icon-section",
-            icon("check", id = "home-icons"),
-            icon("download", id = "home-icons"),
-            icon("bar-chart", id = "home-icons")
-          ),
-          div(
-            class = "display-home-section",
-            h2(id = "display-home-text", "Select"),
-            h2(id = "display-home-text", "Download"),
-            h2(id = "display-home-text", "Visualize")
-          )
-        ),
-        hr(
-          style = "border-top: 1.5px solid grey;"
-        ),
-        div(
-          h2(id = "goals",
-             "Goals:"),
-          p(id = "home-goals", "1) "),
-          p(id = "home-goals", "2) "),
-          p(id = "home-goals", "3) ")
+          textOutput(ns("text"))
         )
       )
     )
   )
-} # End of UI
-
+}
 # Module Server function
-pageWelcomeServer <- function(id, parentSession){
+pageWelcomeServer <- function(id){
   moduleServer(id, function(input, output, session){
-    #server for "get started" button
-    observeEvent(input$get_started_button, {
-      updateNavbarPage(session = parentSession,
-                       inputId = "navbar",
-                       selected = "Select & Download")
+    index <- reactiveVal(1)
+
+    observeEvent(input[["previous"]], {
+      index(max(index()-1, 1))
     })
+    observeEvent(input[["next"]], {
+      index(min(index()+1, length(imgs)))
+    })
+
+    output$image <- renderImage({
+      x <- imgs[index()]
+      list(src = x, alt = "alternate text")
+    }, deleteFile = FALSE)
+
+    output$text <- renderText({
+      text <- imgTexts[index()]
+      text
+    })
+
   })
 } #End of Server
 
@@ -744,7 +745,7 @@ ui <- navbarPage(
 
 # Main App Server
 server <- function(input, output, session) {
-  pageWelcomeServer("welcome", parentSession = session)
+  pageWelcomeServer("welcome")
   pageSelectServer("select")
   pageVisualizationServer("visualization")
   spiServer("spi")
