@@ -55,9 +55,9 @@ imgs <- list.files("images/", pattern=".png", full.names = TRUE)
 
 # Create image text
 imgTexts <- c(
-  "View and interact with long-term annual trends",
-  "Select specific months to analyze changes in long-term trends",
-  "Interact with high-quality vizualizations to view wet periods and droughts"
+  "Interact with specified rain gauges to analyze long-term annual trends.",
+  "Select specific months to analyze changes in long-term trends.",
+  "View high-quality vizualizations to determine wet periods and droughts."
 )
 
 
@@ -75,26 +75,35 @@ pageWelcomeUi <- function(id) {
 
       sidebarLayout(
         sidebarPanel(
-          h3("This tool serves the purpose of downloading and visualizing
+          h3("What can you do?",
+             style = "font-weight: bold; text-align: center;"),
+          p("This tool serves the purpose of downloading and visualizing
              monthly-updated precipitation data from the Santa Rita Experimental
              Range. The Santa Rita Experimental Range currently has 24 active rain
              gauges that are monitored monthly. Here, you can interact with, download,
-             and visualize important historical and current data!"),
+             and visualize important historical and current data!",
+             style = "font-size: 20px;"),
           br(),
-          h2("Goals:"),
+          h3("Goals:",
+             style = "font-weight: bold; text-align: center;"),
           p("1) View and interact with high-quality visualizations that show wet
-            periods, droughts, and longer term trends."),
-          p("2) Download calculated SPI values across multiple time periods."),
-          p("3) Gain a broader understanding of trends with the assistance of descriptive statistics.")
+            periods, droughts, and longer term trends.",
+            style = "font-size: 20px;"),
+          p("2) Download calculated SPI values across multiple time periods.",
+            style = "font-size: 20px;"),
+          p("3) Gain a broader understanding of trends with the assistance of descriptive statistics.",
+            style = "font-size: 20px;")
         ),
 
         mainPanel(
-          imageOutput(ns("image")),
+          imageOutput(ns("image")) |>
+            tagAppendAttributes(style = 'align-items: right'),
+          textOutput(ns("text")) |>
+            tagAppendAttributes(style= 'font-size: 20px; padding: 20px; margin-left: 120px;'),
           fluidRow(
             column(3, offset=2, actionButton(ns("previous"), "Previous")),
             column(3, offset=2, actionButton(ns("next"), "Next"))
           ),
-          textOutput(ns("text"))
         )
       )
     )
