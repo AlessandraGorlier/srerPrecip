@@ -17,10 +17,11 @@ library(lubridate)
 current_date <- Sys.Date()
 
 # get previous month
-previous_month <- format(as.Date(format(current_date, "%Y-%m-01")), "%Y-%m")
+previous_month <- format(as.Date(format(current_date, "%Y-%m-01"))-1, "%Y-%m")
+month <- format(as.Date(format(current_date, "%Y-%m-01")), "%Y-%m")
 
 # grab url
-url <- sprintf("https://santarita.arizona.edu/sites/santarita.arizona.edu/files/%s/precip%s.xlsx", previous_month, previous_month)
+url <- sprintf("https://santarita.arizona.edu/sites/santarita.arizona.edu/files/%s/precip%s.xlsx", month, previous_month)
 
 # read to xlsx
 precip_data <- read.xlsx(url)
@@ -74,19 +75,36 @@ merged_data <- rbind(active, precip_data)
 merged_data <- merged_data |>
   filter(precipitation != -9999)
 
-for_text_file <- precip_data |>
-  select(station, year, month)|>
-  filter(station %in% c('GRARI', 'AMADO', 'PAST3','SW','41','ROAD',
-                        'WHITE', 'RODEN', 'DESGR', 'FORES', '45',
-                        'BOX','IBP','PARKE','RUELA', 'ERIOP', 'MUHLE',
-                        'NW','DESST','164','DESRI','HUERF','LIMST',
-                        'NE'))
 
-for_text_file <- for_text_file[order(for_text_file$station),]
+#r1955_04: Interpolation failed because the number of gauges is 1.
+#r1955_05: Interpolation failed because the number of gauges is 1.
+#r1955_06: Interpolation failed because the number of gauges is 2.
+#r1959_01: Interpolation failed because the number of gauges is 1.
+month_mapping2 <- c(`4` = 'APR', `5` = 'MAY', `6` = 'JUN')
+
+impute1 <- merged_data %>%
+  group_by(station, month_id) %>%
+  summarize(precipitation = mean(precipitation)) %>%
+  filter(month_id %in% c(4,5,6)) %>%
+  mutate(year = 1955) %>%
+  mutate(month = month_mapping2[as.character(month_id)]) |>
+  mutate(station, year, month, precipitation, month_id)
+
+merged_data <- rbind(merged_data, impute1)
+
+
+impute2 <- merged_data %>%
+  group_by(station, month_id) %>%
+  summarize(precipitation = mean(precipitation)) %>%
+  filter(month_id %in% c(1)) %>%
+  mutate(year = 1959) %>%
+  mutate(month = 'JAN') |>
+  mutate(station, year, month, precipitation, month_id)
+
+merged_data <- rbind(merged_data, impute2)
 
 write.csv(merged_data, "data/precipitation/estimated_precip.csv", row.names = FALSE)
 
-write.csv(for_text_file, "data/precipitation/estimated_gauges", row.names = FALSE)
 
 
 
