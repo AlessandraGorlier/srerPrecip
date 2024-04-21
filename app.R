@@ -149,7 +149,7 @@ pageSelectUi <- function(id) {
           p("3. Click download"),
           p(HTML("<i>If DOWNLOADING data, please select <b> months, years, and rain gauge(s)</b></i>")),
           hr(style = "border-top: 1.5px solid grey;"),
-          h3("Downoad Data"),
+          h3("Download Data"),
           # select gauges - DOWNLOAD
           selectInput(ns("downloadSelectGauges"),
                       label = "Select Rain Gauge:",
