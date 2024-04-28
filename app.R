@@ -165,6 +165,7 @@ pageSelectUi <- function(id) {
                       "Month Selection",
                       min = 1, max = 12, value = c(3, 9)),
           downloadButton(ns("downloadData"),"Download Data"),
+          downloadButton(ns("downloadAllData"), "Download All Data"),
           hr()
         ),
         mainPanel(
@@ -208,12 +209,25 @@ pageSelectServer <- function(id) {
         )
     })
 
+    all_data <- reactive ({
+      precipitation <- precipitation
+    })
+
     output$downloadData <- downloadHandler(
       filename = function() {
         paste("precipitaiton_", Sys.Date(), ".csv", sep = "")
       },
       content = function(file) {
         write.csv(filtered_data(), file)
+      }
+    )
+    # download all table
+    output$downloadAllData <- downloadHandler(
+      filename = function() {
+        paste0("all_data", ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(all_data(), file, row.names = FALSE)
       }
     )
   })
@@ -249,9 +263,11 @@ pageVisualizationUi <- function(id){
           p(HTML("<b>Minimum:</b>")),
           textOutput(ns("textFiltered4")),
           br(),
-          br(),
-          br(),
           downloadButton(ns("downloadDT"),"Download Data Table"),
+          br(),
+          br(),
+          br(),
+          p("To download the plot hover over the image and select the camera icon"),
           width = 5
         ),
         mainPanel(
@@ -398,6 +414,10 @@ spiUI <- function(id) {
           br(),
           downloadButton(ns("downloadSPITable"), "Download SPI Data"),
           downloadButton(ns("downloadSPIPlot"), "Download SPI (1,3,12) Plot"),
+          br(),
+          br(),
+          br(),
+          p("To download the plot hover over the image and select the camera icon"),
           width = 5
         ),
         mainPanel(
@@ -564,6 +584,10 @@ pageDroughtUi <- function(id){
           textOutput(ns("Filtered4")),
           br(),
           downloadButton(ns("DownloadMonthlyDT"),"Download Table"),
+          br(),
+          br(),
+          br(),
+          p("To download the plot hover over the image and select the camera icon"),
           width = 5
         ),
         mainPanel(
