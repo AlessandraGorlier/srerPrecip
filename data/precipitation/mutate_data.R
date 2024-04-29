@@ -3,7 +3,8 @@
 #The purpose of this script is to run once a month and output a csv with up-to-
 #date precipitation data from active rain gauges on the Santa Rita Experimental
 #Range. This script also will estimate missing values (-9999) based on location
-#and modeled values based on month.
+#and modeled values based on month. Long-term averages were taken for APR, MAY,
+#and JUN of 1955, along with JAN 1959.
 
 library(readxl)
 library(openxlsx)

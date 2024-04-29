@@ -57,7 +57,7 @@ imgs <- list.files("images/", pattern=".png", full.names = TRUE)
 imgTexts <- c(
   "Interact with specified rain gauges to analyze long-term annual trends.",
   "Select specific months to analyze changes in long-term trends.",
-  "View high-quality vizualizations to determine wet periods and droughts."
+  "View high-quality vizualizations representing wet periods and droughts."
 )
 
 
@@ -81,7 +81,7 @@ pageWelcomeUi <- function(id) {
              monthly-updated precipitation data from the Santa Rita Experimental
              Range. The Santa Rita Experimental Range currently has 24 active rain
              gauges that are monitored monthly. Here, you can interact with, download,
-             and visualize important historical and current data!",
+             and visualize important historical (starting in 1923) and current data!",
              style = "font-size: 20px;"),
           br(),
           h3("Goals:",
@@ -89,13 +89,16 @@ pageWelcomeUi <- function(id) {
           p("1) View and interact with high-quality visualizations that show wet
             periods, droughts, and longer term trends.",
             style = "font-size: 20px;"),
-          p("2) Download calculated SPI values across multiple time periods.",
+          p("2) Download calculated SPI (Standard Precipitation Index) values across multiple time periods.",
             style = "font-size: 20px;"),
           p("3) Gain a broader understanding of trends with the assistance of descriptive statistics.",
             style = "font-size: 20px;")
         ),
 
         mainPanel(
+          h2("Three examples of what you can produce on this website"),
+          br(),
+          br(),
           imageOutput(ns("image")) |>
             tagAppendAttributes(style = 'align-items: right'),
           textOutput(ns("text")) |>
@@ -144,7 +147,7 @@ pageSelectUi <- function(id) {
       sidebarLayout(
         sidebarPanel(
           h3("Select rain gauges and year"),
-          p("1. Select rain guage (can hover on icons to view location of gauge)"),
+          p("1. Select rain guage(s) (can hover on icons to view location of gauge)"),
           p("2. Use sliders to choose time period of interest"),
           p("3. Click download"),
           p(HTML("<i>If DOWNLOADING data, please select <b> months, years, and rain gauge(s)</b></i>")),
@@ -152,7 +155,7 @@ pageSelectUi <- function(id) {
           h3("Download Data"),
           # select gauges - DOWNLOAD
           selectInput(ns("downloadSelectGauges"),
-                      label = "Select Rain Gauge:",
+                      label = "Select Rain Gauge(s):",
                       choices = unique(precipitation$station),
                       multiple = TRUE),
 
@@ -163,7 +166,7 @@ pageSelectUi <- function(id) {
           # select months - DOWNLOAD
           sliderInput(ns("selectMonths"),
                       "Month Selection",
-                      min = 1, max = 12, value = c(3, 9)),
+                      min = 1, max = 12, value = c(1, 12)),
           downloadButton(ns("downloadData"),"Download Data"),
           downloadButton(ns("downloadAllData"), "Download All Data"),
           hr()
@@ -243,6 +246,8 @@ pageVisualizationUi <- function(id){
       sidebarLayout(
         sidebarPanel(
           h3("Average Annual Precipitation"),
+          p("1. Select a rain guage (can hover on icons to view location of gauge)"),
+          p("2. Use sliders and drop-downs to pick gauge and time period of interest"),
           leafletOutput(ns("srerMap"),
                         height = "450px",
                         width = "550px"),
@@ -320,9 +325,9 @@ pageVisualizationServer <- function(id) {
         filtered <- filtered |>
           mutate(spiyear = spi12) |>
           group_by(year) |>
-          summarise(avg_precip = mean(precipitation),
+          summarise(avg_precip_mm = mean(precipitation),
                     spiyear = mean(spiyear, na.rm = TRUE)) |>
-          mutate(across(c('avg_precip', 'spiyear'), round, 2))
+          mutate(across(c('avg_precip_mm', 'spiyear'), round, 2))
 
     })
 
@@ -330,17 +335,17 @@ pageVisualizationServer <- function(id) {
     overall_mean <- reactive({
       filtered_data <- filtered_means()
       filtered_data <- filtered_data |>
-        summarise(all_mean = mean(filtered_data$avg_precip, na.rm = TRUE),
-                  all_sd = sd(filtered_data$avg_precip, na.rm = TRUE),
-                  all_max = max(filtered_data$avg_precip, na.rm = TRUE),
-                  all_min = min(filtered_data$avg_precip, na.rm = TRUE))|>
+        summarise(all_mean = mean(filtered_data$avg_precip_mm, na.rm = TRUE),
+                  all_sd = sd(filtered_data$avg_precip_mm, na.rm = TRUE),
+                  all_max = max(filtered_data$avg_precip_mm, na.rm = TRUE),
+                  all_min = min(filtered_data$avg_precip_mm, na.rm = TRUE))|>
         mutate(across(c('all_mean', 'all_sd', 'all_max', 'all_min'), round, 2))
     })
 
 
     #Average Temperature plot per selected yrs + gauge
     annual_graph <- reactive ({
-      ann <- ggplot(filtered_means(), aes(x = year, y = avg_precip)) +
+      ann <- ggplot(filtered_means(), aes(x = year, y = avg_precip_mm)) +
         geom_bar(stat = "identity", fill = "skyblue", color = 'grey') +
         geom_hline(yintercept = mean(overall_mean()$all_mean, na.rm=TRUE)) +
         #geom_text(aes(0, mean(filtered()$avg_precip, na.rm=TRUE), label = 'mean avg. precipitation', vjust = -1)) +
@@ -402,6 +407,8 @@ spiUI <- function(id) {
       sidebarLayout(
         sidebarPanel(
           h3("Standard Precipitation Index"),
+          p("1. Select a rain guage (can hover on icons to view location of gauge)"),
+          p("2. Use sliders and drop-downs to pick gauge and time period of interest"),
           leafletOutput(ns("srerMap")),
           #select input for gauges
           selectInput(ns("selectGauges"),
@@ -418,6 +425,8 @@ spiUI <- function(id) {
           br(),
           br(),
           p("To download the plot hover over the image and select the camera icon"),
+          p("Shorter time periods (smaller sample size) might result in irregularities in
+            SPI calculations."),
           width = 5
         ),
         mainPanel(
@@ -524,7 +533,7 @@ spiServer <- function(id) {
     output$multiSPIgraph <- renderPlotly({
       plot_ly(processed_spi_multi(), x = ~date, y = ~variable, z = ~spi_value,
               colors=brewer.pal(11,'BrBG'), type = "heatmap", zmin=-3, zmax=3) %>%
-        layout(title = paste0("Multi-scale ", input$selectGauges, " Plot"),
+        layout(title = paste0("1-48 months SPI calculations for ", input$selectGauges, " (mm)"),
                xaxis=list(title="Month-Year"),
                yaxis=list(title="Scale(mos)"))
     })
@@ -561,6 +570,8 @@ pageDroughtUi <- function(id){
       sidebarLayout(
         sidebarPanel(
           h3("Period Selection"),
+          p("1. Select a rain guage (can hover on icons to view location of gauge)"),
+          p("2. Use sliders and drop-downs to pick gauge and time period of interest"),
           leafletOutput(ns("srerMap")),
           #select input for gauges
           selectInput(ns("selectGauges"),
@@ -687,7 +698,8 @@ pageDroughtServer <- function(id){
           axis.text.y = element_text(hjust = 1),
           legend.text = element_text(size = rel(1.3))
         ) +
-        labs(x = 'Year',y = 'Month', title = paste0('Total Monthly Rainfall for ', input$selectGauges, ' (mm)'))
+        labs(x = 'Year',y = 'Month', title = paste0('Total Monthly Rainfall for ', input$selectGauges, ' (mm)'),
+             fill = 'precipitation (mm)')
 
       ggplotly(gg)
     })
