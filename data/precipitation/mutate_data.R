@@ -27,6 +27,10 @@ url <- sprintf("https://santarita.arizona.edu/sites/santarita.arizona.edu/files/
 # read to xlsx
 precip_data <- read.xlsx(url)
 
+##IF ABOVE FAILS, UNCOMMENT AND RUN THIS (you will have to input recent SRER data):
+
+#precip_data <- read.xlsx("most recent SRER data")
+
 month_mapping <- c(JAN = 1, FEB = 2, MAR = 3, APR = 4, MAY = 5, JUN = 6, JUL = 7, AUG = 8, SEP = 9, OCT = 10, NOV = 11, DEC = 12)
 
 active <- precip_data |>

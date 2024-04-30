@@ -61,6 +61,8 @@ imgTexts <- c(
 )
 
 
+
+
 ### HOME PAGE MODULAIZATION -------------------------------------------------------
 
 # Module UI function
