@@ -96,7 +96,8 @@ pageWelcomeUi <- function(id) {
         ),
 
         mainPanel(
-          h2("Three examples of what you can produce on this website"),
+          h2("Three examples of visualizations you can create with this tool:"),
+          actionButton(ns("get_started_button"), label = "Get Started!", icon("paper-plane")),
           br(),
           br(),
           imageOutput(ns("image")) |>
@@ -113,8 +114,13 @@ pageWelcomeUi <- function(id) {
   )
 }
 # Module Server function
-pageWelcomeServer <- function(id){
+pageWelcomeServer <- function(id, parentSession){
   moduleServer(id, function(input, output, session){
+    observeEvent(input$get_started_button, {
+      updateNavbarPage(session = parentSession,
+                       inputId = "navbar",
+                       selected = "Annual Averages")
+    })
     index <- reactiveVal(1)
 
     observeEvent(input[["previous"]], {
@@ -247,7 +253,8 @@ pageVisualizationUi <- function(id){
         sidebarPanel(
           h3("Average Annual Precipitation"),
           p("1. Select a rain guage (can hover on icons to view location of gauge)"),
-          p("2. Use sliders and drop-downs to pick gauge and time period of interest"),
+          p("2. Use drop-down to pick a singular gauge"),
+          p("3. Use sliders to select a time period of interest"),
           leafletOutput(ns("srerMap"),
                         height = "450px",
                         width = "550px"),
@@ -408,7 +415,8 @@ spiUI <- function(id) {
         sidebarPanel(
           h3("Standard Precipitation Index"),
           p("1. Select a rain guage (can hover on icons to view location of gauge)"),
-          p("2. Use sliders and drop-downs to pick gauge and time period of interest"),
+          p("2. Use drop-down to pick a singular gauge"),
+          p("3. Use sliders to select a time period of interest"),
           leafletOutput(ns("srerMap")),
           #select input for gauges
           selectInput(ns("selectGauges"),
@@ -535,7 +543,7 @@ spiServer <- function(id) {
               colors=brewer.pal(11,'BrBG'), type = "heatmap", zmin=-3, zmax=3) %>%
         layout(title = paste0("1-48 months SPI calculations for ", input$selectGauges, " (mm)"),
                xaxis=list(title="Month-Year"),
-               yaxis=list(title="Scale(mos)"))
+               yaxis=list(title="Scale(months)"))
     })
 
     # download information table
@@ -571,7 +579,8 @@ pageDroughtUi <- function(id){
         sidebarPanel(
           h3("Period Selection"),
           p("1. Select a rain guage (can hover on icons to view location of gauge)"),
-          p("2. Use sliders and drop-downs to pick gauge and time period of interest"),
+          p("2. Use drop-down to pick a singular gauge"),
+          p("3. Use sliders to select a time period of interest"),
           leafletOutput(ns("srerMap")),
           #select input for gauges
           selectInput(ns("selectGauges"),
@@ -790,7 +799,7 @@ ui <- navbarPage(
 
 # Main App Server
 server <- function(input, output, session) {
-  pageWelcomeServer("welcome")
+  pageWelcomeServer("welcome", parentSession = session)
   pageSelectServer("select")
   pageVisualizationServer("visualization")
   spiServer("spi")
