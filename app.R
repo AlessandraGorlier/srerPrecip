@@ -257,9 +257,7 @@ pageVisualizationUi <- function(id){
           p("1. Select a rain guage (can hover on icons to view location of gauge)"),
           p("2. Use drop-down to pick a singular gauge"),
           p("3. Use sliders to select a time period of interest"),
-          leafletOutput(ns("srerMap"),
-                        height = "450px",
-                        width = "550px"),
+          leafletOutput(ns("srerMap")),
           #select input for gauges
           selectInput(ns("selectGauges"),
                       label = "Select Rain Gauge:",
