@@ -155,7 +155,7 @@ pageSelectUi <- function(id) {
       sidebarLayout(
         sidebarPanel(
           h3("Select rain gauges and year"),
-          p("1. Select rain guage(s) (can hover on icons to view location of gauge)"),
+          p("1. Select rain gauge(s) (can hover on icons to view location of gauge)"),
           p("2. Use sliders to choose time period of interest"),
           p("3. Click download"),
           p(HTML("<i>If DOWNLOADING data, please select <b> months, years, and rain gauge(s)</b></i>")),
@@ -254,7 +254,7 @@ pageVisualizationUi <- function(id){
       sidebarLayout(
         sidebarPanel(
           h3("Average Annual Precipitation"),
-          p("1. Select a rain guage (can hover on icons to view location of gauge)"),
+          p("1. Select a rain gauge (can hover on icons to view location of gauge)"),
           p("2. Use drop-down to pick a singular gauge"),
           p("3. Use sliders to select a time period of interest"),
           leafletOutput(ns("srerMap")),
@@ -414,7 +414,7 @@ spiUI <- function(id) {
       sidebarLayout(
         sidebarPanel(
           h3("Standard Precipitation Index"),
-          p("1. Select a rain guage (can hover on icons to view location of gauge)"),
+          p("1. Select a rain gauge (can hover on icons to view location of gauge)"),
           p("2. Use drop-down to pick a singular gauge"),
           p("3. Use sliders to select a time period of interest"),
           leafletOutput(ns("srerMap")),
@@ -578,7 +578,7 @@ pageDroughtUi <- function(id){
       sidebarLayout(
         sidebarPanel(
           h3("Period Selection"),
-          p("1. Select a rain guage (can hover on icons to view location of gauge)"),
+          p("1. Select a rain gauge (can hover on icons to view location of gauge)"),
           p("2. Use drop-down to pick a singular gauge"),
           p("3. Use sliders to select a time period of interest"),
           leafletOutput(ns("srerMap")),
